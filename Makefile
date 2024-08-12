@@ -1,41 +1,73 @@
-CC = gcc
-CFLAGS = -std=c90 -Wall -Wextra -pedantic -Isrc -Ibuild
+BUILD = build
+SRC = src
+OBJS = parser.o lexer.o texalc.o
+EXE = texalc
+DEBUG_EXE = $(EXE)-debug
 
-DEBUG_CFLAGS = -g
-RELEASE_CFLAGS = -O3
+RELEASE_DIR = $(BUILD)/release
+DEBUG_DIR = $(BUILD)/debug
+
+CC = gcc
+CFLAGS = -Wall -Wextra -pedantic -I $(SRC)
+
+RELEASE_CFLAGS = -Ofast -I $(RELEASE_DIR)
+DEBUG_CFLAGS = -std=c90 -g -O0 -I $(DEBUG_DIR)
 
 LEX = flex
 PAR = bison
 
-BUILD = build
-SRC = src
-SRCS = texalc.c
-OBJS = parser.o lexer.o
-EXE = texalc
+LEX_FLAGS = --warn
+PAR_FLAGS = -Wall -Wdangling-alias -Wcounterexamples -fcaret -ffixit
+RELEASE_LEX_FLAGS =
+DEBUG_LEX_FLAGS = -d -pp -s
+RELEASE_PAR_FLAGS =
+DEBUG_PAR_FLAGS = -t -Wyacc
 
-all: setup build
+all: setup release
 
 .PHONY: setup
 setup:
-	mkdir -p $(BUILD)
+	mkdir -p $(RELEASE_DIR)
+	mkdir -p $(DEBUG_DIR)
 
-.PHONY: build
-build: $(SRC)/*
-	$(PAR) -d -o $(BUILD)/parser.c $(SRC)/parser.y
-	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c $(BUILD)/parser.c -o $(BUILD)/parser.o
-	$(LEX) -o $(BUILD)/lexer.c $(SRC)/lexer.l
-	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c $(BUILD)/lexer.c -o $(BUILD)/lexer.o
-	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) $(SRC)/texalc.c $(BUILD)/parser.o $(BUILD)/lexer.o -o texalc
+.PHONY: release
+release: $(EXE)
+
+$(RELEASE_DIR)/parser.o: $(SRC)/parser.y
+	$(PAR) $(PAR_FLAGS) $(RELEASE_PAR_FLAGS) -o $(RELEASE_DIR)/parser.c $(SRC)/parser.y
+	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c $(RELEASE_DIR)/parser.c -o $(RELEASE_DIR)/parser.o
+
+$(RELEASE_DIR)/lexer.o: $(SRC)/lexer.l
+	$(LEX) $(LEX_FLAGS) $(RELEASE_LEX_FLAGS) -o $(RELEASE_DIR)/lexer.c $(SRC)/lexer.l
+	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c $(RELEASE_DIR)/lexer.c -o $(RELEASE_DIR)/lexer.o
+
+$(RELEASE_DIR)/%.o: $(SRC)/%.c
+	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c  $< -o $@
+
+$(EXE): $(addprefix $(RELEASE_DIR)/, $(OBJS))
+	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) $^ -o $(EXE)
 
 .PHONY: debug
-debug: $(SRC)/*
-	$(PAR) -d -o $(BUILD)/parser.c $(SRC)/parser.y
-	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c $(BUILD)/parser.c -o $(BUILD)/parser.o
-	$(LEX) -o $(BUILD)/lexer.c $(SRC)/lexer.l
-	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c $(BUILD)/lexer.c -o $(BUILD)/lexer.o
-	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) $(SRC)/texalc.c $(BUILD)/parser.o $(BUILD)/lexer.o -o texalc
+debug: $(DEBUG_EXE)
+
+$(DEBUG_DIR)/parser.o: $(SRC)/parser.y
+	$(PAR) $(PAR_FLAGS) $(DEBUG_PAR_FLAGS) -o $(DEBUG_DIR)/parser.c $(SRC)/parser.y
+	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c $(DEBUG_DIR)/parser.c -o $(DEBUG_DIR)/parser.o
+
+$(DEBUG_DIR)/lexer.o: $(SRC)/lexer.l
+	$(LEX) $(LEX_FLAGS) $(DEBUG_LEX_FLAGS) -o $(DEBUG_DIR)/lexer.c $(SRC)/lexer.l
+	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c $(DEBUG_DIR)/lexer.c -o $(DEBUG_DIR)/lexer.o
+
+$(DEBUG_DIR)/%.o: $(SRC)/%.c
+	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c  $< -o $@
+
+$(DEBUG_EXE): $(addprefix $(DEBUG_DIR)/, $(OBJS))
+	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) $^ -o $(DEBUG_EXE)
 
 .PHONY: clean
 clean:
-	rm -rf $(BUILD)
-	rm -f texalc
+	rm -fr $(RELEASE_DIR)
+	rm -fr $(DEBUG_DIR)
+	rm -fr $(BUILD)
+	rm -fr $(EXE)
+	rm -fr $(DEBUG_EXE)
