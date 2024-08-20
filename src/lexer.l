@@ -18,6 +18,7 @@
 
 %{
     #include <stdio.h>
+
     #include "parser.h"
 %}
 
@@ -28,11 +29,13 @@
 
 %%
 
-"+"     { return ADD; }
-"*"     { return MUL; }
-[0-9]+  { yylval = atoi(yytext); return INT; }
-\\\\    { return END; }
-[ \t\n] { /* skip whitespaces */ }
-.       { printf("invalid character: %c\n", *yytext); }
+"+"          { return ADD; }
+"*"          { return MUL; }
+0[bB][0-9]+  { yylval.pascal_str.str = yytext; yylval.pascal_str.len = yyleng; return BIN_NUM_N; }
+[0-9]+       { yylval.pascal_str.str = yytext; yylval.pascal_str.len = yyleng; return DEC_NUM_N; }
+0[xX}[0-9]+  { yylval.pascal_str.str = yytext; yylval.pascal_str.len = yyleng; return HEX_NUM_N; }
+\\\\         { return END; }
+[ \t\n]      { /* skip whitespaces */ }
+.            { printf("invalid character: %c\n", *yytext); }
 
 %%

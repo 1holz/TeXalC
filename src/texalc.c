@@ -16,11 +16,11 @@
  *
  */
 
-#include <stdio.h>
-#include "parser.h"
+#include "common.h"
 
-extern int yylex(void);
-extern void yyerror(const char *);
+#include <stdio.h>
+
+#include "parser.h"
 
 int main(int argc, char **argv)
 {

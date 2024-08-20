@@ -52,6 +52,7 @@ Mkfile.old
 dkms.conf
 
 # CUSTOM
-texalc
+texalc*
 build/
 LICENSE_HEADER
+.vscode

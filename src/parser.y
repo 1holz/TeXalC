@@ -19,27 +19,54 @@
 %{
     #include <stdio.h>
 
+    #include "numbers.h"
+
     extern int yylex(void);
     extern void yyerror(const char *);
 %}
 
-%token INT
-%token ADD MUL
+%header
+
+%token <pascal_str> BIN_NUM_N DEC_NUM_N HEX_NUM_N
+%token ADD
+%token MUL
+%token EXP
+%token L_PAREN R_PAREN
 %token END
+
+%code requires
+{
+    struct pascal_str
+    {
+        char *str;
+        size_t len;
+    };
+}
+
+%union
+{
+    struct pascal_str pascal_str;
+}
 
 %%
 
-expr:
-    | expr sum END  { printf("= %d\n\n", $2); };
+num: %empty
+    | num BIN_NUM_N END  { printf("= %s\n\n", txc_num_to_str(txc_create_natural_num_or_zero($2.str, $2.len))); }
+    ;
+
+/*
+expr: %empty
+    | expr sum END  { printf("= %d\n\n", $2); }
+    ;
 
 sum: prod
-    | sum ADD sum  { $$ = $1 + $3; }
+    | sum ADD BIN_NUM_N  { $$ = $1 + $3; }
     ;
 
-prod: INT
-    | INT MUL INT   { $$ = $1 * $3; }
-    | prod MUL INT  { $$ = $1 * $3; }
+prod: BIN_NUM_N
+    | prod MUL BIN_NUM_N  { $$ = $1 * $3; }
     ;
+*/
 
 %%
 
