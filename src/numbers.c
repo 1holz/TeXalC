@@ -154,22 +154,27 @@ static size_t txc_num_array_fit(txc_num_array *const array)
 static txc_num_array *txc_num_array_shift_bigger(txc_num_array *const array)
 {
     txc_num_array_assert_valid(array);
-    TXC_NUM_ARRAY_TYPE *cur = array->data + array->used;
-    if (array->used >= array->size && cur[0] > TXC_NUM_ARRAY_TYPE_MAX / 2)
+    if (array->used >= array->size && array->data[array->used] > TXC_NUM_ARRAY_TYPE_MAX / 2)
     {
         if (txc_num_array_inc(array) <= 0)
             return NULL;
         array->used++;
-        cur[1] = 1;
+        array->data[array->used + 1] = 1;
     }
-    while (cur != array->data)
+    bool carry = 0;
+    for (size_t i = 0; i < array->used; i++)
     {
-        cur[0] <<= 1;
-        if (cur[-1] > TXC_NUM_ARRAY_TYPE_MAX / 2)
-            cur[0]++;
-        cur--;
+        bool new_carry = array->data[i] > TXC_NUM_ARRAY_TYPE_MAX / 2;
+        array->data[i] <<= 1;
+        if (carry)
+            array->data[i] += 1;
+        carry = new_carry;
     }
-    array->data[0] <<= 1;
+    if (carry)
+    {
+        array->data[array->used] = 1;
+        (array->used)++;
+    }
     return array;
 }
 
@@ -197,7 +202,7 @@ static txc_num_array *txc_num_array_from_bin_str(const char *const str, const si
     if (len == 0)
         return array;
     array->used = 1;
-    *(array->data) = 0;
+    array->data[0] = 0;
     for (size_t i = 0; i < len; i++)
     {
         array = txc_num_array_shift_bigger(array);
@@ -375,13 +380,12 @@ const char *txc_num_to_str(txc_num *const num)
             for (size_t bit_i = TXC_NUM_ARRAY_TYPE_WIDTH; bit_i > 0; bit_i--)
             {
                 uint_fast8_t carry = (array.data[array_i - 1] >> (bit_i - 1)) & 1;
-                for (size_t len_i = len; len_i > 0; len_i--)
+                for (size_t i = 0; i < len; i++)
                 {
-                    size_t i = len_i - 1;
-                    if ((str[i] & 15) >= 5)
+                    if (str[i] >= 5)
                         str[i] += 3;
                     str[i] = (str[i] << 1) + carry;
-                    carry = str[i] & 16;
+                    carry = str[i] > 15 ? 1 : 0;
                     str[i] = str[i] & 15;
                 }
                 if (carry != 0)
