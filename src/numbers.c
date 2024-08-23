@@ -222,8 +222,25 @@ static txc_num_array *txc_num_array_from_dec_str(const char *const str, const si
 
 static txc_num_array *txc_num_array_from_hex_str(const char *const str, const size_t len)
 {
-    fprintf(stderr, TXC_ERROR_NYI, __FILE__, __LINE__);
-    return NULL;
+    const size_t hex_width = 4;
+    const size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / hex_width;
+    txc_num_array *array = txc_num_array_init(len / chars_per_elem + 1);
+    if (array == NULL)
+        return NULL;
+    if (len == 0)
+        return array;
+    array->used = 0;
+    for (size_t i = 0; i < len; i++)
+    {
+        if (i % chars_per_elem == 0)
+        {
+            array->data[array->used] = 0;
+            (array->used)++;
+        }
+        const char buf[2] = {str[len - i - 1], 0};
+        array->data[array->used - 1] += strtoul((const char *restrict)&buf, NULL, 16) << ((i % chars_per_elem) * hex_width);
+    }
+    return array;
 }
 
 /* CREATE */
