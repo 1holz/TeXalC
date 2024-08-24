@@ -216,8 +216,51 @@ static txc_num_array *txc_num_array_from_bin_str(const char *const str, const si
 
 static txc_num_array *txc_num_array_from_dec_str(const char *const str, const size_t len)
 {
-    fprintf(stderr, TXC_ERROR_NYI, __FILE__, __LINE__);
-    return NULL;
+    const size_t dec_width = 4;
+    const size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / dec_width;
+    unsigned char buf[len];
+    for (size_t i = 0; i < len; i++)
+        buf[i] = str[len - i - 1] - 48;
+    txc_num_array *array = txc_num_array_init(len / chars_per_elem + 1);
+    if (array == NULL)
+        return NULL;
+    if (len <= 0)
+        return array;
+    array->data[0] = 0;
+    array->used = 1;
+    unsigned char bit_i = 0;
+    size_t buf_len = len;
+    while (buf_len > 0)
+    {
+        if (buf[buf_len - 1] == 0)
+        {
+            buf_len--;
+            continue;
+        }
+        bool carry = false;
+        for (size_t ii = 0; ii < buf_len; ii++)
+        {
+            size_t i = buf_len - ii - 1;
+            bool new_carry = buf[i] % 2 == 1;
+            buf[i] >>= 1;
+            if (carry)
+                buf[i] += 1 << (dec_width - 1);
+            if (buf[i] >= 8)
+                buf[i] -= 3;
+            carry = new_carry;
+        }
+        if (carry)
+            array->data[array->used - 1] += 1 << bit_i;
+        if (bit_i >= TXC_NUM_ARRAY_TYPE_WIDTH - 1)
+        {
+            array->data[array->used] = 0;
+            (array->used)++;
+            bit_i = 0;
+        }
+        else
+            bit_i++;
+    }
+    return array;
 }
 
 static txc_num_array *txc_num_array_from_hex_str(const char *const str, const size_t len)

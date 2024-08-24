@@ -34,6 +34,8 @@
 %token L_PAREN R_PAREN
 %token END
 
+%type <pascal_str> num_n
+
 %code requires
 {
     struct pascal_str
@@ -50,23 +52,33 @@
 
 %%
 
-num: %empty
-    | num BIN_NUM_N END  { printf("= %s\n\n", txc_num_to_str(txc_create_natural_num_or_zero($2.str, $2.len))); }
-    ;
+num:
+  %empty
+| num num_n END  { printf("= %s\n\n", txc_num_to_str(txc_create_natural_num_or_zero($2.str, $2.len))); }
+;
 
 /*
-expr: %empty
-    | expr sum END  { printf("= %d\n\n", $2); }
-    ;
+expr:
+  %empty
+| expr sum END  { printf("= %d\n\n", $2); }
+;
 
-sum: prod
-    | sum ADD BIN_NUM_N  { $$ = $1 + $3; }
-    ;
+sum:
+  prod
+| sum ADD num_n  { $$ = $1 + $3; }
+;
 
-prod: BIN_NUM_N
-    | prod MUL BIN_NUM_N  { $$ = $1 * $3; }
-    ;
+prod:
+  num_n
+| prod MUL num_n  { $$ = $1 * $3; }
+;
 */
+
+num_n:
+  BIN_NUM_N
+| DEC_NUM_N
+| HEX_NUM_N
+;
 
 %%
 
