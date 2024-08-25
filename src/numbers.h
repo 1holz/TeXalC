@@ -22,35 +22,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define TXC_NUM_ARRAY_TYPE unsigned char
-
 /* TYPEDEFS */
 
-typedef enum txc_num_type
-{
-    TXC_NAN,
-    TXC_NIL,
-    TXC_ZERO,
-    TXC_NATURAL_NUM
-} txc_num_type;
-
-typedef struct txc_num_array
-{
-    TXC_NUM_ARRAY_TYPE *data;
-    size_t size;
-    size_t used;
-} txc_num_array;
-
-typedef struct txc_num
-{
-    union
-    {
-        txc_num_array *natural_num;
-    } impl;
-    char *str;
-    txc_num_type type;
-    bool singleton;
-} txc_num;
+typedef struct txc_num txc_num;
 
 /* SINGLETONS */
 
@@ -64,11 +38,11 @@ extern const txc_num TXC_ZERO_ZERO;
 
 /* CREATE */
 
-extern txc_num *txc_create_nan(char *const reason);
+extern txc_num *txc_create_nan(const char *const reason);
 
-extern txc_num *txc_create_nil(char *const reason);
+extern txc_num *txc_create_nil(const char *const reason);
 
-extern txc_num *txc_create_natural_num_or_zero(char *const str, size_t len);
+extern txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len);
 
 /* NUM */
 

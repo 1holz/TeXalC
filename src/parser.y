@@ -25,8 +25,6 @@
     extern void yyerror(const char *);
 %}
 
-%header
-
 %token <pascal_str> BIN_NUM_N DEC_NUM_N HEX_NUM_N
 %token ADD
 %token MUL
@@ -40,7 +38,7 @@
 {
     struct pascal_str
     {
-        char *str;
+        const char * str;
         size_t len;
     };
 }
@@ -49,6 +47,8 @@
 {
     struct pascal_str pascal_str;
 }
+
+%start num
 
 %%
 
@@ -84,5 +84,5 @@ num_n:
 
 void yyerror(char const *s)
 {
-    fprintf(stderr, "Error: %s\n", s);
+    fprintf(stderr, "Parser error: %s\n", s);
 }

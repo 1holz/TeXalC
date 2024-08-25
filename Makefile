@@ -1,6 +1,6 @@
 BUILD = build
 SRC = src
-OBJS = parser.o numbers.o lexer.o texalc.o
+OBJS = parser.o lexer.o numbers.o texalc.o
 EXE = texalc
 DEBUG_EXE = $(EXE)-debug
 
@@ -8,7 +8,7 @@ RELEASE_DIR = $(BUILD)/release
 DEBUG_DIR = $(BUILD)/debug
 
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic -I$(SRC)
+CFLAGS = -Wall -Wextra -pedantic -I$(SRC) -Wno-alloc-size-larger-than
 
 RELEASE_CFLAGS = -Ofast -I$(RELEASE_DIR)
 DEBUG_CFLAGS = -std=c99 -D_POSIX_VERSION=200112L -D_POSIX_C_SOURCE=200112L -g -O0 -I$(DEBUG_DIR)
@@ -17,11 +17,11 @@ LEX = flex
 PAR = bison
 
 LEX_FLAGS = --warn
-PAR_FLAGS = -Wall -Wdangling-alias -Wcounterexamples -fcaret -ffixit
+PAR_FLAGS = --header -Wall -Wdangling-alias -Wcounterexamples -fcaret -ffixit
 RELEASE_LEX_FLAGS =
-DEBUG_LEX_FLAGS = -d -pp -s
+DEBUG_LEX_FLAGS = --debug --perf-report --perf-report --nodefault --posix# --lex-compat --verbose
 RELEASE_PAR_FLAGS =
-DEBUG_PAR_FLAGS = -t -Wyacc
+DEBUG_PAR_FLAGS = --debug --yacc# --report=all --graph
 
 all: setup release
 

@@ -19,6 +19,8 @@
 #ifndef TXC_COMMON
 #define TXC_COMMON
 
+#define TXC_VERSION 000001
+
 #ifndef __STDC__
 #pragma GCC warning "This environment seems to not comply with any C standard and is thus not supported."
 #endif /* __STDC__ */
