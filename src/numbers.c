@@ -38,11 +38,12 @@
 #define TXC_ERROR_NYI "Not yet implemented in %s line %d.\n"
 #define TXC_ERROR_ILLEGAL_ARG "Illegal argument %s in %s line %d.\n"
 #define TXC_ERROR_ALLOC "Could not allocate %zu bytes of memory for %s in %s line %d.\n"
-#define TXC_ERROR_UNKNOWN_NUM_TYPE "Number type %du is unknownin %s line %d.\n"
+#define TXC_ERROR_INVALID_NUM_TYPE "Number type %du is invalid in %s line %d.\n"
 
 #define TXC_PRINT_NAN "\\text{NAN(%s)}"
 #define TXC_PRINT_NAN_ERROR_ALLOC "\\text{NAN(Could not allocate enough memory. Please see stderr for more information.)}"
 #define TXC_PRINT_NAN_ERROR_NYI "\\text{NAN(Not yet implemented. Please see stderr for more information.)}"
+#define TXC_PRINT_NAN_ERROR_INVALID_NUM_TYPE "\\text{NAN(Number type is invalid. Please see stderr for more information.)}"
 #define TXC_PRINT_NAN_UNSPECIFIED "\\text{NAN(unspecified)}"
 
 #define TXC_PRINT_NIL "\\text{NIL(%s)}"
@@ -51,7 +52,7 @@
 #define TXC_PRINT_ZERO "0"
 
 #define TXC_PRINT_ERROR_NYI "\\text{PRINT(not yet implemented)}"
-#define TXC_PRINT_ERROR_UNKNOWN_NUM_TYPE "\\text{PRINT(Number type is unknown. Please see stderr for more information.)}"
+#define TXC_PRINT_ERROR_INVALID_NUM_TYPE "\\text{PRINT(Number type is invalid. Please see stderr for more information.)}"
 
 struct txc_num_array
 {
@@ -74,7 +75,7 @@ struct txc_num
     {
         struct txc_num_array *natural_num;
     } impl;
-    const char *str;
+    char *str;
     enum txc_num_type type;
     bool singleton;
 };
@@ -87,6 +88,9 @@ const txc_num TXC_NAN_ERROR_ALLOC = {.str = TXC_PRINT_NAN_ERROR_ALLOC,
 const txc_num TXC_NAN_ERROR_NYI = {.str = TXC_PRINT_NAN_ERROR_NYI,
                                    .type = TXC_NAN,
                                    .singleton = true};
+const txc_num TXC_NAN_ERROR_INVALID_NUM_TYPE = {.str = TXC_PRINT_ERROR_INVALID_NUM_TYPE,
+                                                .type = TXC_NAN,
+                                                .singleton = true};
 const txc_num TXC_NAN_UNSPECIFIED = {.str = TXC_PRINT_NAN_UNSPECIFIED,
                                      .type = TXC_NAN,
                                      .singleton = true};
@@ -99,7 +103,7 @@ const txc_num TXC_ZERO_ZERO = {.str = TXC_PRINT_ZERO,
                                .type = TXC_ZERO,
                                .singleton = true};
 
-/* NUM ARRAY */
+/* ASSERTS */
 
 static void txc_num_array_assert_valid(const struct txc_num_array *const array)
 {
@@ -107,6 +111,32 @@ static void txc_num_array_assert_valid(const struct txc_num_array *const array)
     assert(array->data != NULL);
     assert(array->used <= array->size);
 }
+
+static void txc_num_assert_valid(const txc_num *const num)
+{
+    assert(num != NULL);
+    if (num->singleton)
+    {
+        assert(num->str != NULL);
+    }
+    switch (num->type)
+    {
+    case TXC_NAN: /* FALLTHROUGH */
+    case TXC_NIL:
+        break;
+    case TXC_ZERO:
+        assert(num == &TXC_ZERO_ZERO);
+        break;
+    case TXC_NATURAL_NUM:
+        txc_num_array_assert_valid(num->impl.natural_num);
+        break;
+    default:
+        assert(false);
+        break;
+    }
+}
+
+/* NUM ARRAY */
 
 static struct txc_num_array *txc_num_array_init(size_t size)
 {
@@ -306,7 +336,7 @@ static struct txc_num_array *txc_num_array_from_hex_str(struct txc_num_array *ar
     return array;
 }
 
-/* CREATE */
+/* CREATE, COPY AND FREE */
 
 txc_num *txc_create_nan(const char *const reason)
 {
@@ -377,7 +407,7 @@ txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len)
         cur++;
     if (len <= 0)
         return (txc_num *)&TXC_ZERO_ZERO;
-size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;
+    size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;
     struct txc_num_array *array = txc_num_array_init(len / chars_per_elem + 1);
     if (array == NULL)
         return (txc_num *)&TXC_NAN_ERROR_ALLOC;
@@ -411,31 +441,74 @@ size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;
     return num;
 }
 
-/* NUM */
-
-static void txc_num_assert_valid(const txc_num *const num)
+txc_num *txc_copy_num(txc_num *const from)
 {
-    assert(num != NULL);
-    if (num->singleton)
+    txc_num_assert_valid(from);
+    if (from->singleton)
+        return from;
+    txc_num *copy = malloc(sizeof *copy);
+    if (copy == NULL)
     {
-        assert(num->str != NULL);
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy", __FILE__, __LINE__);
+        return (txc_num *)&TXC_NAN_ERROR_ALLOC;
     }
-    switch (num->type)
+    switch (from->type)
     {
     case TXC_NAN: /* FALLTHROUGH */
     case TXC_NIL:
-        break;
-    case TXC_ZERO:
-        assert(num == &TXC_ZERO_ZERO);
+        copy->str = txc_strdup(from->str);
+        if (copy->str == NULL)
+        {
+            fprintf(stderr, TXC_ERROR_ALLOC, sizeof copy->str, "copy string", __FILE__, __LINE__);
+            free(copy);
+            return (txc_num *)&TXC_NAN_ERROR_ALLOC;
+        }
         break;
     case TXC_NATURAL_NUM:
-        txc_num_array_assert_valid(num->impl.natural_num);
+        copy->impl.natural_num = txc_num_array_init(from->impl.natural_num->used);
+        if (copy->impl.natural_num == NULL)
+        {
+            free(copy);
+            return (txc_num *)&TXC_NAN_ERROR_ALLOC;
+        }
+        for (size_t i = 0; i < copy->impl.natural_num->used; i++)
+            copy->impl.natural_num->data[i] = from->impl.natural_num->data[i];
+        copy->str = NULL;
         break;
     default:
-        assert(false);
-        break;
+        fprintf(stderr, TXC_ERROR_INVALID_NUM_TYPE, from->type, __FILE__, __LINE__);
+        free(copy);
+        return (txc_num *)&TXC_NAN_ERROR_INVALID_NUM_TYPE;
     }
+    copy->type = from->type;
+    copy->singleton = false;
+    return copy;
 }
+
+void txc_free_num(txc_num *const num)
+{
+    txc_num_assert_valid(num);
+    if (num->singleton)
+        return;
+    switch (num->type)
+    {
+    case TXC_NAN: /* FALLTROUGH */
+    case TXC_NIL: /* FALLTROUGH */
+    case TXC_ZERO:
+        break;
+    case TXC_NATURAL_NUM:
+        free(num->impl.natural_num->data);
+        free(num->impl.natural_num);
+        break;
+    default:
+        fprintf(stderr, TXC_ERROR_INVALID_NUM_TYPE, num->type, __FILE__, __LINE__);
+        return;
+    }
+    free(num->str);
+    free(num);
+}
+
+/* NUM */
 
 const char *txc_num_to_str(txc_num *const num)
 {
@@ -450,9 +523,6 @@ const char *txc_num_to_str(txc_num *const num)
     case TXC_NIL:
         num->str = TXC_NIL_UNSPECIFIED.str;
         return TXC_NIL_UNSPECIFIED.str;
-    case TXC_ZERO:
-        num->str = TXC_ZERO_ZERO.str;
-        return TXC_ZERO_ZERO.str;
     case TXC_NATURAL_NUM:
     {
         struct txc_num_array array = *(num->impl.natural_num);
@@ -495,7 +565,7 @@ const char *txc_num_to_str(txc_num *const num)
         return str;
     }
     default:
-        fprintf(stderr, TXC_ERROR_UNKNOWN_NUM_TYPE, num->type, __FILE__, __LINE__);
-        return TXC_PRINT_ERROR_UNKNOWN_NUM_TYPE;
+        fprintf(stderr, TXC_ERROR_INVALID_NUM_TYPE, num->type, __FILE__, __LINE__);
+        return TXC_PRINT_ERROR_INVALID_NUM_TYPE;
     }
 }

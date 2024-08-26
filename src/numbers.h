@@ -30,19 +30,24 @@ typedef struct txc_num txc_num;
 
 extern const txc_num TXC_NAN_ERROR_ALLOC;
 extern const txc_num TXC_NAN_ERROR_NYI;
+extern const txc_num TXC_NAN_ERROR_INVALID_NUM_TYPE;
 extern const txc_num TXC_NAN_UNSPECIFIED;
 
 extern const txc_num TXC_NIL_UNSPECIFIED;
 
 extern const txc_num TXC_ZERO_ZERO;
 
-/* CREATE */
+/* CREATE, COPY AND FREE */
 
 extern txc_num *txc_create_nan(const char *const reason);
 
 extern txc_num *txc_create_nil(const char *const reason);
 
 extern txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len);
+
+extern txc_num *txc_copy_num(txc_num *const from);
+
+extern void txc_free_num(txc_num *const num);
 
 /* NUM */
 
