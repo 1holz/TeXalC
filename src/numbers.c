@@ -27,6 +27,7 @@
 #include <strings.h>
 
 #include "numbers.h"
+#include "util.h"
 
 #define TXC_GROWTH_FACTOR 2
 
@@ -314,10 +315,16 @@ txc_num *txc_create_nan(const char *const reason)
     txc_num *nan = malloc(sizeof *nan);
     if (nan == NULL)
     {
-        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *nan, "reason", __FILE__, __LINE__);
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *nan, "nan", __FILE__, __LINE__);
         return (txc_num *)&TXC_NAN_ERROR_ALLOC;
     }
-    nan->str = reason;
+    nan->str = txc_strdup(reason);
+    if (nan->str == NULL)
+    {
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *nan, "nan reason", __FILE__, __LINE__);
+        free(nan);
+        return (txc_num *)&TXC_NAN_ERROR_ALLOC;
+    }
     nan->type = TXC_NAN;
     nan->singleton = false;
     return nan;
@@ -327,16 +334,22 @@ txc_num *txc_create_nil(const char *const reason)
 {
     if (reason == NULL)
         return (txc_num *)&TXC_NIL_UNSPECIFIED;
-    txc_num *nan = malloc(sizeof *nan);
-    if (nan == NULL)
+    txc_num *nil = malloc(sizeof *nil);
+    if (nil == NULL)
     {
-        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *nan, "reason", __FILE__, __LINE__);
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *nil, "nil", __FILE__, __LINE__);
         return (txc_num *)&TXC_NAN_ERROR_ALLOC;
     }
-    nan->str = reason;
-    nan->type = TXC_NIL;
-    nan->singleton = false;
-    return nan;
+    nil->str = txc_strdup(reason);
+    if (nil->str == NULL)
+    {
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *nil, "nil reason", __FILE__, __LINE__);
+        free(nil);
+        return (txc_num *)&TXC_NAN_ERROR_ALLOC;
+    }
+    nil->type = TXC_NIL;
+    nil->singleton = false;
+    return nil;
 }
 
 txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len)
@@ -344,7 +357,6 @@ txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len)
     uint_fast8_t base = 10;
     const char *cur = str;
     size_t width = 4;
-    size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;
     if (len >= 2)
     {
         if (!strncasecmp(str, "0b", 2))
@@ -365,6 +377,7 @@ txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len)
         cur++;
     if (len <= 0)
         return (txc_num *)&TXC_ZERO_ZERO;
+size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;
     struct txc_num_array *array = txc_num_array_init(len / chars_per_elem + 1);
     if (array == NULL)
         return (txc_num *)&TXC_NAN_ERROR_ALLOC;
@@ -477,16 +490,7 @@ const char *txc_num_to_str(txc_num *const num)
         str[len] = 0;
         for (size_t i = 0; i < len; i++)
             str[i] += 48;
-        char *front = str;
-        char *back = str + len - 1;
-        while (front < back)
-        {
-            *front ^= *back;
-            *back ^= *front;
-            *front ^= *back;
-            front++;
-            back--;
-        }
+        str = txc_strrev(str);
         num->str = str;
         return str;
     }

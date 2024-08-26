@@ -1,6 +1,6 @@
 BUILD = build
 SRC = src
-OBJS = parser.o lexer.o numbers.o texalc.o
+OBJS = parser.o lexer.o util.o numbers.o texalc.o
 EXE = texalc
 DEBUG_EXE = $(EXE)-debug
 
