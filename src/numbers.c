@@ -558,6 +558,7 @@ txc_num *txc_num_add(txc_num *const *const summands, const size_t len)
                     else
                     {
                         array->data[j]++;
+                        carry = false;
                     }
                 }
                 if (j < summands[i]->impl.natural_num->used)

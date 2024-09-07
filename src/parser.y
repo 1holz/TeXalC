@@ -53,7 +53,7 @@
 
 expr:
   %empty
-| expr sum END  { printf("= %s\n\n", txc_num_to_str($2)); }
+| expr sum END  { printf("= %s\\\\\n\n", txc_num_to_str($2)); }
 ;
 
 sum:
