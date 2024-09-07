@@ -19,65 +19,57 @@
 %{
     #include <stdio.h>
 
-    #include "numbers.h"
-
     extern int yylex(void);
     extern void yyerror(const char *);
 %}
 
-%token <pascal_str> BIN_NUM_N DEC_NUM_N HEX_NUM_N
-%token ADD
-%token MUL
-%token EXP
-%token L_PAREN R_PAREN
-%token END
-
-%type <pascal_str> num_n
-
 %code requires
 {
+    #include "numbers.h"
+
     struct pascal_str
     {
-        const char * str;
+        const char *str;
         size_t len;
     };
 }
 
+%token <pascal_str> BIN_NUM_N DEC_NUM_N HEX_NUM_N
+%token ADD
+%token MUL
+%token END
+
+%type <num> sum prod num_n
+
 %union
 {
     struct pascal_str pascal_str;
+    txc_num *num;
 }
 
-%start num
+%start expr
 
 %%
 
-num:
-  %empty
-| num num_n END  { printf("= %s\n\n", txc_num_to_str(txc_create_natural_num_or_zero($2.str, $2.len))); }
-;
-
-/*
 expr:
   %empty
-| expr sum END  { printf("= %d\n\n", $2); }
+| expr sum END  { printf("= %s\n\n", txc_num_to_str($2)); }
 ;
 
 sum:
   prod
-| sum ADD num_n  { $$ = $1 + $3; }
+| sum ADD num_n  { txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); }
 ;
 
 prod:
   num_n
-| prod MUL num_n  { $$ = $1 * $3; }
+| prod MUL num_n  { $$ = (txc_num *)&TXC_NAN_ERROR_NYI; }
 ;
-*/
 
 num_n:
-  BIN_NUM_N
-| DEC_NUM_N
-| HEX_NUM_N
+  BIN_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len); }
+| DEC_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len); }
+| HEX_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len); }
 ;
 
 %%

@@ -105,14 +105,14 @@ const txc_num TXC_ZERO_ZERO = {.str = TXC_PRINT_ZERO,
 
 /* ASSERTS */
 
-static void txc_num_array_assert_valid(const struct txc_num_array *const array)
+static void num_array_assert_valid(const struct txc_num_array *const array)
 {
     assert(array != NULL);
     assert(array->data != NULL);
     assert(array->used <= array->size);
 }
 
-static void txc_num_assert_valid(const txc_num *const num)
+static void num_assert_valid(const txc_num *const num)
 {
     assert(num != NULL);
     if (num->singleton)
@@ -128,7 +128,7 @@ static void txc_num_assert_valid(const txc_num *const num)
         assert(num == &TXC_ZERO_ZERO);
         break;
     case TXC_NATURAL_NUM:
-        txc_num_array_assert_valid(num->impl.natural_num);
+        num_array_assert_valid(num->impl.natural_num);
         break;
     default:
         assert(false);
@@ -138,7 +138,7 @@ static void txc_num_assert_valid(const txc_num *const num)
 
 /* NUM ARRAY */
 
-static struct txc_num_array *txc_num_array_init(size_t size)
+static struct txc_num_array *num_array_init(size_t size)
 {
     if (size <= 0)
     {
@@ -163,29 +163,18 @@ static struct txc_num_array *txc_num_array_init(size_t size)
     return array;
 }
 
-static size_t txc_num_array_inc(struct txc_num_array *const array)
+static size_t num_array_inc_amount(struct txc_num_array *const array, size_t new_size)
 {
-    txc_num_array_assert_valid(array);
+    num_array_assert_valid(array);
+    const size_t max_size = SIZE_MAX / sizeof *(array->data);
     if (array->used >= SIZE_MAX)
         return 0;
-    size_t new_size = SIZE_MAX / sizeof *(array->data) / (TXC_NUM_ARRAY_TYPE_WIDTH / CHAR_BIT);
-    if (array->used >= new_size / TXC_GROWTH_FACTOR)
-    {
-        TXC_NUM_ARRAY_TYPE *tmp = realloc(array->data, sizeof *(array->data) * new_size);
-        if (tmp == NULL)
-        {
-            fprintf(stderr, TXC_ERROR_ALLOC, sizeof *(array->data) * new_size, "max size", __FILE__, __LINE__);
-            return array->size - array->used;
-        }
-        array->data = tmp;
-        array->size = SIZE_MAX;
-        return array->size - array->used;
-    }
-    new_size = array->used * TXC_GROWTH_FACTOR;
-    if (new_size <= array->used)
-        new_size = array->used + 1;
     if (new_size <= array->size)
         return array->size - array->used;
+    if (new_size <= array->used)
+        new_size = array->used + 1;
+    else if (array->used >= max_size / TXC_GROWTH_FACTOR)
+        new_size = max_size;
     TXC_NUM_ARRAY_TYPE *tmp = realloc(array->data, sizeof *(array->data) * new_size);
     if (tmp == NULL)
     {
@@ -197,9 +186,14 @@ static size_t txc_num_array_inc(struct txc_num_array *const array)
     return array->size - array->used;
 }
 
-static size_t txc_num_array_fit(struct txc_num_array *const array)
+static size_t num_array_inc(struct txc_num_array *const array)
 {
-    txc_num_array_assert_valid(array);
+    return num_array_inc_amount(array, array->used * TXC_GROWTH_FACTOR);
+}
+
+static size_t num_array_fit(struct txc_num_array *const array)
+{
+    num_array_assert_valid(array);
     while (array->used > 0 && array->data[array->used - 1] == 0)
         (array->used)--;
     size_t new_size = array->used <= 0 ? 1 : array->used;
@@ -211,12 +205,12 @@ static size_t txc_num_array_fit(struct txc_num_array *const array)
     return array->size - array->used;
 }
 
-static struct txc_num_array *txc_num_array_shift_bigger(struct txc_num_array *const array)
+static struct txc_num_array *num_array_shift_bigger(struct txc_num_array *const array)
 {
-    txc_num_array_assert_valid(array);
+    num_array_assert_valid(array);
     if (array->used >= array->size && array->data[array->used - 1] > TXC_NUM_ARRAY_TYPE_MAX / 2)
     {
-        if (txc_num_array_inc(array) <= 0)
+        if (num_array_inc(array) <= 0)
             return NULL;
         array->used++;
         array->data[array->used + 1] = 1;
@@ -233,14 +227,14 @@ static struct txc_num_array *txc_num_array_shift_bigger(struct txc_num_array *co
     if (carry)
     {
         array->data[array->used] = 1;
-        (array->used)++;
+        array->used++;
     }
     return array;
 }
 
-static struct txc_num_array *txc_num_array_shift_smaller(struct txc_num_array *const array)
+static struct txc_num_array *num_array_shift_smaller(struct txc_num_array *const array)
 {
-    txc_num_array_assert_valid(array);
+    num_array_assert_valid(array);
     if (!array->used)
         return array;
     size_t cur = 0;
@@ -254,7 +248,7 @@ static struct txc_num_array *txc_num_array_shift_smaller(struct txc_num_array *c
     return array;
 }
 
-static struct txc_num_array *txc_num_array_from_bin_str(struct txc_num_array *array, const char *const str, const size_t len)
+static struct txc_num_array *num_array_from_bin_str(struct txc_num_array *array, const char *const str, const size_t len)
 {
     for (size_t i = 0; i < len; i++)
         assert('0' <= str[i] && str[i] <= '1');
@@ -265,14 +259,14 @@ static struct txc_num_array *txc_num_array_from_bin_str(struct txc_num_array *ar
         if (i % chars_per_elem == 0)
         {
             array->data[array->used] = 0;
-            (array->used)++;
+            array->used++;
         }
         array->data[array->used - 1] += (str[len - i - 1] - 48) << ((i % chars_per_elem) * bin_width);
     }
     return array;
 }
 
-static struct txc_num_array *txc_num_array_from_dec_str(struct txc_num_array *array, const char *const str, const size_t len)
+static struct txc_num_array *num_array_from_dec_str(struct txc_num_array *array, const char *const str, const size_t len)
 {
     for (size_t i = 0; i < len; i++)
         assert('0' <= str[i] && str[i] <= '9');
@@ -308,7 +302,7 @@ static struct txc_num_array *txc_num_array_from_dec_str(struct txc_num_array *ar
         if (bit_i >= TXC_NUM_ARRAY_TYPE_WIDTH - 1)
         {
             array->data[array->used] = 0;
-            (array->used)++;
+            array->used++;
             bit_i = 0;
         }
         else
@@ -317,7 +311,7 @@ static struct txc_num_array *txc_num_array_from_dec_str(struct txc_num_array *ar
     return array;
 }
 
-static struct txc_num_array *txc_num_array_from_hex_str(struct txc_num_array *array, const char *const str, const size_t len)
+static struct txc_num_array *num_array_from_hex_str(struct txc_num_array *array, const char *const str, const size_t len)
 {
     for (size_t i = 0; i < len; i++)
         assert(('0' <= str[i] && str[i] <= '9') || ('A' <= str[i] && str[i] <= 'F') || ('a' <= str[i] && str[i] <= 'f'));
@@ -328,7 +322,7 @@ static struct txc_num_array *txc_num_array_from_hex_str(struct txc_num_array *ar
         if (i % chars_per_elem == 0)
         {
             array->data[array->used] = 0;
-            (array->used)++;
+            array->used++;
         }
         const char buf[2] = {str[len - i - 1], 0};
         array->data[array->used - 1] += strtoul((const char *restrict)&buf, NULL, 16) << ((i % chars_per_elem) * hex_width);
@@ -394,13 +388,14 @@ txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len)
             len -= 2;
             base = 2;
             cur += 2;
+            width = 1;
         }
         else if (!strncasecmp(str, "0x", 2))
         {
             len -= 2;
             base = 16;
             cur += 2;
-            width = 1;
+            width = 4;
         }
     }
     for (; cur[0] == '0'; len--)
@@ -408,25 +403,25 @@ txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len)
     if (len <= 0)
         return (txc_num *)&TXC_ZERO_ZERO;
     size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;
-    struct txc_num_array *array = txc_num_array_init(len / chars_per_elem + 1);
+    struct txc_num_array *array = num_array_init(len / chars_per_elem + 1);
     if (array == NULL)
         return (txc_num *)&TXC_NAN_ERROR_ALLOC;
     switch (base)
     {
     case 2:
-        array = txc_num_array_from_bin_str(array, cur, len);
+        array = num_array_from_bin_str(array, cur, len);
         break;
     default: /* FALLTHROUGH */
     case 10:
-        array = txc_num_array_from_dec_str(array, cur, len);
+        array = num_array_from_dec_str(array, cur, len);
         break;
     case 16:
-        array = txc_num_array_from_hex_str(array, cur, len);
+        array = num_array_from_hex_str(array, cur, len);
         break;
     }
     if (array == NULL)
         return (txc_num *)&TXC_NAN_ERROR_ALLOC;
-    txc_num_array_fit(array);
+    num_array_fit(array);
     txc_num *num = malloc(sizeof *num);
     if (num == NULL)
     {
@@ -443,7 +438,7 @@ txc_num *txc_create_natural_num_or_zero(const char *const str, size_t len)
 
 txc_num *txc_copy_num(txc_num *const from)
 {
-    txc_num_assert_valid(from);
+    num_assert_valid(from);
     if (from->singleton)
         return from;
     txc_num *copy = malloc(sizeof *copy);
@@ -465,15 +460,16 @@ txc_num *txc_copy_num(txc_num *const from)
         }
         break;
     case TXC_NATURAL_NUM:
-        copy->impl.natural_num = txc_num_array_init(from->impl.natural_num->used);
+        copy->impl.natural_num = num_array_init(from->impl.natural_num->used);
         if (copy->impl.natural_num == NULL)
         {
             free(copy);
             return (txc_num *)&TXC_NAN_ERROR_ALLOC;
         }
+        copy->impl.natural_num->used = from->impl.natural_num->used;
+        copy->str = NULL;
         for (size_t i = 0; i < copy->impl.natural_num->used; i++)
             copy->impl.natural_num->data[i] = from->impl.natural_num->data[i];
-        copy->str = NULL;
         break;
     default:
         fprintf(stderr, TXC_ERROR_INVALID_NUM_TYPE, from->type, __FILE__, __LINE__);
@@ -487,7 +483,7 @@ txc_num *txc_copy_num(txc_num *const from)
 
 void txc_free_num(txc_num *const num)
 {
-    txc_num_assert_valid(num);
+    num_assert_valid(num);
     if (num->singleton)
         return;
     switch (num->type)
@@ -510,9 +506,101 @@ void txc_free_num(txc_num *const num)
 
 /* NUM */
 
+txc_num *txc_num_add(txc_num *const *const summands, const size_t len)
+{
+    txc_num *acc = NULL;
+    bool finish = false;
+    for (size_t i = 0; i < len; i++)
+    {
+        switch (summands[i]->type)
+        {
+        case TXC_NAN:
+            acc = txc_copy_num(summands[i]);
+            finish = true;
+            break;
+        case TXC_NIL: /* FALLTHROUGH */
+        case TXC_ZERO:
+            break;
+        case TXC_NATURAL_NUM:
+            if (acc == NULL)
+            {
+                acc = txc_copy_num(summands[i]);
+                break;
+            }
+            struct txc_num_array *array = acc->impl.natural_num;
+            size_t larger_size = array->used;
+            if (summands[i]->impl.natural_num->used > array->used)
+                larger_size = summands[i]->impl.natural_num->used;
+            num_array_inc_amount(array, larger_size);
+            if (array->size < larger_size)
+            {
+                acc = (txc_num *)&TXC_NAN_ERROR_ALLOC;
+                finish = true;
+                break;
+            }
+            bool carry = false;
+            for (size_t j = 0; j < larger_size; j++)
+            {
+                if (j >= array->used)
+                {
+                    array->data[array->used] = 0;
+                    array->used++;
+                }
+                if (summands[i]->impl.natural_num->used <= j && !carry)
+                    break;
+                if (carry)
+                {
+                    if (array->data[j] >= TXC_NUM_ARRAY_TYPE_MAX)
+                    {
+                        array->data[j] = 0;
+                        carry = true;
+                    }
+                    else
+                    {
+                        array->data[j]++;
+                    }
+                }
+                if (j < summands[i]->impl.natural_num->used)
+                {
+                    TXC_NUM_ARRAY_TYPE to_add = summands[i]->impl.natural_num->data[j];
+                    if (TXC_NUM_ARRAY_TYPE_MAX - array->data[j] < to_add)
+                        carry = true;
+                    array->data[j] += to_add;
+                }
+            }
+            if (carry)
+            {
+                if (array->used >= array->size && num_array_inc(array) <= 0)
+                {
+                    acc = (txc_num *)&TXC_NAN_ERROR_ALLOC;
+                    finish = true;
+                    break;
+                }
+                array->data[array->used] = 1;
+                array->used++;
+            }
+            break;
+        default:
+            fprintf(stderr, TXC_ERROR_INVALID_NUM_TYPE, summands[i]->type, __FILE__, __LINE__);
+            acc = (txc_num *)&TXC_NAN_ERROR_INVALID_NUM_TYPE;
+            finish = true;
+            break;
+        }
+        if (finish)
+            break;
+    }
+    for (size_t i = 0; i < len; i++)
+        txc_free_num(summands[i]);
+    if (acc == NULL)
+        acc = (txc_num *)&TXC_ZERO_ZERO;
+    if (acc->type == TXC_NATURAL_NUM)
+        num_array_fit(acc->impl.natural_num);
+    return acc;
+}
+
 const char *txc_num_to_str(txc_num *const num)
 {
-    txc_num_assert_valid(num);
+    num_assert_valid(num);
     if (num->str != NULL)
         return num->str;
     switch (num->type)

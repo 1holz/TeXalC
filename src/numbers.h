@@ -51,6 +51,8 @@ extern void txc_free_num(txc_num *const num);
 
 /* NUM */
 
+extern txc_num *txc_num_add(txc_num *const *const summands, const size_t len);
+
 extern const char *txc_num_to_str(txc_num *const num);
 
 #endif /* TXC_NUMBERS */
