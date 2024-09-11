@@ -59,12 +59,12 @@ expr:
 
 sum:
   prod
-| sum ADD num_n  { $$ = (txc_node *)&TXC_NAN_ERROR_NYI; /* txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); */ }
+| sum ADD num_n  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); /* txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); */ }
 ;
 
 prod:
   num_n
-| prod MUL num_n  { $$ = (txc_node *)&TXC_NAN_ERROR_NYI; }
+| prod MUL num_n  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); /* $$ = (txc_node *)&TXC_NAN_ERROR_NYI; */ }
 ;
 
 num_n:
