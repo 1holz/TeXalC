@@ -25,6 +25,7 @@
 
 %code requires
 {
+    #include "node.h"
     #include "numbers.h"
 
     struct pascal_str
@@ -34,18 +35,18 @@
     };
 }
 
+%union
+{
+    struct pascal_str pascal_str;
+    txc_node *node;
+}
+
 %token <pascal_str> BIN_NUM_N DEC_NUM_N HEX_NUM_N
 %token ADD
 %token MUL
 %token END
 
-%type <num> sum prod num_n
-
-%union
-{
-    struct pascal_str pascal_str;
-    txc_num *num;
-}
+%type <node> sum prod num_n
 
 %start expr
 
@@ -53,17 +54,17 @@
 
 expr:
   %empty
-| expr sum END  { printf("= %s\\\\\n\n", txc_num_to_str($2)); }
+| expr sum END  { txc_node_print($2); }
 ;
 
 sum:
   prod
-| sum ADD num_n  { txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); }
+| sum ADD num_n  { $$ = (txc_node *)&TXC_NAN_ERROR_NYI; /* txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); */ }
 ;
 
 prod:
   num_n
-| prod MUL num_n  { $$ = (txc_num *)&TXC_NAN_ERROR_NYI; }
+| prod MUL num_n  { $$ = (txc_node *)&TXC_NAN_ERROR_NYI; }
 ;
 
 num_n:

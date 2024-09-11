@@ -16,30 +16,44 @@
  *
  */
 
-#ifndef TXC_NUMBERS
-#define TXC_NUMBERS
-
-#include <stdbool.h>
-#include <stddef.h>
-
-#include "node.h"
+#ifndef TXC_NODE
+#define TXC_NODE
 
 /* DEFINITIONS */
 
-typedef struct txc_num_array txc_num;
+enum txc_node_type
+{
+    TXC_NAN,
 
-/* CREATE, COPY AND FREE */
+    TXC_NUM,
 
-extern txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len);
+    TXC_ADD,
+    TXC_MUL
+};
 
-extern txc_num *txc_copy_num(txc_num *const from);
+union impl
+{
+    char *reason;
+    struct txc_num_array *natural_num;
+};
 
-extern void txc_free_num(txc_num *const num);
+typedef struct txc_node txc_node;
 
-/* NUM */
+/* CONSTANTS */
 
-extern txc_num *txc_num_add(txc_num *const *const summands, const size_t len);
+extern const txc_node TXC_NAN_ERROR_ALLOC;
+extern const txc_node TXC_NAN_ERROR_NYI;
+extern const txc_node TXC_NAN_ERROR_INVALID_NODE_TYPE;
+extern const txc_node TXC_NAN_UNSPECIFIED;
 
-extern const char *txc_num_to_str(txc_num *const num);
+/* NODE */
 
-#endif /* TXC_NUMBERS */
+extern txc_node *txc_create_nan(const char *const reason);
+
+extern txc_node *txc_node_create(struct txc_node *children, union impl impl, size_t children_amount, enum txc_node_type type);
+
+extern char *txc_node_to_str(txc_node *const node);
+
+extern void txc_node_print(txc_node *const node);
+
+#endif /* TXC_NODE */
