@@ -48,3 +48,9 @@ char *txc_strrev(char *const str)
     }
     return str;
 }
+
+char *txc_stpcpy(char *restrict dst, const char *restrict src)
+{
+    dst = strcpy(dst, src);
+    return dst + strlen(src);
+}

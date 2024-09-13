@@ -313,7 +313,7 @@ txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len)
     return txc_node_create(NULL, impl, 0, TXC_NUM);
 }
 
-txc_num *txc_copy_num(txc_num *const from)
+txc_num *txc_num_copy(txc_num *const from)
 {
     num_array_assert_valid(from);
     txc_num *copy = num_array_init(from->used);
@@ -328,7 +328,7 @@ txc_num *txc_copy_num(txc_num *const from)
     return copy;
 }
 
-void txc_free_num(txc_num *const num)
+void txc_num_free(txc_num *const num)
 {
     num_array_assert_valid(num);
     if (num->size > 0)

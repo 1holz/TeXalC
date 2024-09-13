@@ -27,7 +27,6 @@
 #include "util.h"
 
 #define TXC_ERROR_NYI "Not yet implemented in %s line %d.\n"
-#define TXC_ERROR_ILLEGAL_ARG "Illegal argument %s in %s line %d.\n"
 #define TXC_ERROR_ALLOC "Could not allocate %zu bytes of memory for %s in %s line %d.\n"
 #define TXC_ERROR_INVALID_NODE_TYPE "Number type %du is invalid in %s line %d.\n"
 
@@ -191,7 +190,7 @@ txc_node *txc_node_copy(txc_node *const from)
         }
         break;
     case TXC_NUM:
-        copy->impl.natural_num = txc_copy_num(from->impl.natural_num);
+        copy->impl.natural_num = txc_num_copy(from->impl.natural_num);
         if (copy->impl.natural_num == NULL)
         {
             fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy natural number", __FILE__, __LINE__);
@@ -221,7 +220,7 @@ void txc_node_free(txc_node *const node)
         free(node->impl.reason);
         break;
     case TXC_NUM:
-        txc_free_num(node->impl.natural_num);
+        txc_num_free(node->impl.natural_num);
         break;
     case TXC_ADD:
         free(node->impl.reason);
@@ -319,6 +318,42 @@ txc_node *txc_node_simplify(txc_node *const node)
     }
 }
 
+static char *concat_children(struct txc_node **const children, const size_t amount, const char *const op)
+{
+    size_t size = 1 + 3 * (amount - 1) + 1;
+    char *child_strs[amount];
+    for (size_t i = 0; i < amount; i++)
+    {
+        child_strs[i] = txc_node_to_str(children[i]);
+        if (child_strs[i] == NULL)
+        {
+            for (size_t j = 0; j < i; j++)
+                free(child_strs[j]);
+            return NULL;
+        }
+        size += strlen(child_strs[i]);
+    }
+    char *const buf = malloc(sizeof *buf * (size + 1));
+    if (buf == NULL)
+    {
+        fprintf(stderr, TXC_ERROR_ALLOC, size, "combined string", __FILE__, __LINE__);
+        for (size_t i = 0; i < amount; i++)
+            free(child_strs[i]);
+        return txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
+    }
+    char *cur = txc_stpcpy(buf, "(");
+    for (size_t i = 0; i < amount; i++)
+    {
+        if (i > 0)
+            cur = txc_stpcpy(cur, op);
+        cur = txc_stpcpy(cur, child_strs[i]);
+    }
+    txc_stpcpy(cur, ")");
+    for (size_t i = 0; i < amount; i++)
+        free(child_strs[i]);
+    return buf;
+}
+
 char *txc_node_to_str(const txc_node *const node)
 {
     node_assert_valid(node);
@@ -341,10 +376,10 @@ char *txc_node_to_str(const txc_node *const node)
             str = txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
         break;
     case TXC_ADD:
-        str = txc_node_to_str((txc_node *)&TXC_NAN_ERROR_NYI);
+        str = concat_children(node->children, node->children_amount, " + ");
         break;
     case TXC_MUL:
-        str = txc_node_to_str((txc_node *)&TXC_NAN_ERROR_NYI);
+        str = concat_children(node->children, node->children_amount, " * ");
         break;
     default:
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, node->type, __FILE__, __LINE__);
