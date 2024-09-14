@@ -59,18 +59,18 @@ expr:
 
 sum:
   prod
-| sum ADD num_n  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); /* txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); */ }
+| sum ADD prod  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); /* txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); */ }
 ;
 
 prod:
   num_n
-| prod MUL num_n  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); /* $$ = (txc_node *)&TXC_NAN_ERROR_NYI; */ }
+| prod MUL num_n  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
 ;
 
 num_n:
-  BIN_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len); }
-| DEC_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len); }
-| HEX_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len); }
+  BIN_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len, 2); }
+| DEC_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len, 10); }
+| HEX_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len, 16); }
 ;
 
 %%

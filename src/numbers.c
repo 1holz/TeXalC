@@ -20,11 +20,8 @@
 
 #include <assert.h>
 #include <limits.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <strings.h>
 
 #include "node.h"
 #include "numbers.h"
@@ -265,28 +262,17 @@ static struct txc_num_array *num_array_from_hex_str(struct txc_num_array *array,
 
 /* CREATE, COPY AND FREE */
 
-txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len)
+txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len, uint_fast8_t base)
 {
-    uint_fast8_t base = 10;
+    if (base != 2 && base != 10 && base != 16)
+    {
+        fprintf(stderr, TXC_ERROR_NYI, __FILE__, __LINE__);
+        return (txc_node *)&TXC_NAN_ERROR_NYI;
+    }
     const char *cur = str;
     size_t width = 4;
-    if (len >= 2)
-    {
-        if (!strncasecmp(str, "0b", 2))
-        {
-            len -= 2;
-            base = 2;
-            cur += 2;
-            width = 1;
-        }
-        else if (!strncasecmp(str, "0x", 2))
-        {
-            len -= 2;
-            base = 16;
-            cur += 2;
-            width = 4;
-        }
-    }
+    if (base == 2)
+        width = 1;
     for (; cur[0] == '0'; len--)
         cur++;
     size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;

@@ -21,6 +21,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "node.h"
 
@@ -30,7 +31,7 @@ typedef struct txc_num_array txc_num;
 
 /* CREATE, COPY AND FREE */
 
-extern txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len);
+extern txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len, uint_fast8_t base);
 
 extern txc_num *txc_num_copy(txc_num *const from);
 

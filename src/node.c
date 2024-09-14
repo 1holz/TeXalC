@@ -36,7 +36,8 @@
 #define TXC_NAN_REASON_ERROR_INVALID_NODE_TYPE "Number type is invalid. Please see stderr for more information."
 #define TXC_NAN_REASON_UNSPECIFIED "unspecified"
 
-#define TXC_PRINT_FORMAT "= %s \\\\\n\n"
+#define TXC_PRINT_FORMAT "= %s \\\\\n"
+#define TXC_PRINT_FORMAT_NEWLINE "= %s \\\\\n\n"
 #define TXC_PRINT_ERROR "\\text{PRINT(Unable to print. Please see stderr for more information.)}"
 
 /* DEFINITIONS */
@@ -213,7 +214,8 @@ void txc_node_free(txc_node *const node)
         return;
     for (size_t i = 0; i < node->children_amount; i++)
         txc_node_free(node->children[i]);
-    free(node->children);
+    if (node->children_amount > 0)
+        free(node->children);
     switch (node->type)
     {
     case TXC_NAN:
@@ -222,11 +224,8 @@ void txc_node_free(txc_node *const node)
     case TXC_NUM:
         txc_num_free(node->impl.natural_num);
         break;
-    case TXC_ADD:
-        free(node->impl.reason);
-        break;
+    case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL:
-        free(node->impl.reason);
         break;
     default:
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, node->type, __FILE__, __LINE__);
@@ -282,7 +281,7 @@ txc_node *txc_node_simplify(txc_node *const node)
         {
             if (node->children[j]->type != copy->type)
             {
-                copy->children[i] = node->children[j];
+                copy->children[i] = txc_node_copy(node->children[j]);
                 j++;
                 continue;
             }
@@ -391,7 +390,7 @@ char *txc_node_to_str(const txc_node *const node)
 void txc_node_print(txc_node *const node)
 {
     node_assert_valid(node);
-    char *const str = txc_node_to_str(node);
+    char *str = txc_node_to_str(node);
     if (str == NULL)
     {
         printf(TXC_PRINT_FORMAT, TXC_PRINT_ERROR);
@@ -399,6 +398,17 @@ void txc_node_print(txc_node *const node)
     else
     {
         printf(TXC_PRINT_FORMAT, str);
+        free(str);
+    }
+    txc_node *const simple_node = txc_node_simplify(node);
+    str = txc_node_to_str(simple_node);
+    if (str == NULL)
+    {
+        printf(TXC_PRINT_FORMAT_NEWLINE, TXC_PRINT_ERROR);
+    }
+    else
+    {
+        printf(TXC_PRINT_FORMAT_NEWLINE, str);
         free(str);
     }
 }
