@@ -54,12 +54,12 @@
 
 expr:
   %empty
-| expr sum END  { txc_node_print($2); }
+| expr sum END  { txc_node_simplify_and_print($2); }
 ;
 
 sum:
   prod
-| sum ADD prod  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); /* txc_num *summands[2] = {$1, $3}; $$ = txc_num_add(summands, 2); */ }
+| sum ADD prod  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); }
 ;
 
 prod:

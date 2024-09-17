@@ -19,7 +19,9 @@
 #ifndef TXC_COMMON
 #define TXC_COMMON
 
-#define TXC_VERSION 000001
+#define TXC_VERSION_MAJOR 0
+#define TXC_VERSION_MINOR 0
+#define TXC_VERSION_PATCH 1
 
 #ifndef __STDC__
 #pragma GCC warning "This environment seems to not comply with any C standard and is thus not supported."

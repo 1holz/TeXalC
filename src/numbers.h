@@ -37,9 +37,13 @@ extern txc_num *txc_num_copy(txc_num *const from);
 
 extern void txc_num_free(txc_num *const num);
 
+/* CONVERT */
+
+extern txc_node *txc_num_to_node(txc_num *const num);
+
 /* NUM */
 
-// extern txc_num *txc_num_add(txc_num *const *const summands, const size_t len);
+extern txc_num *txc_num_add(txc_num *const *const summands, const size_t len);
 
 extern const char *txc_num_to_str(txc_num *const num);
 

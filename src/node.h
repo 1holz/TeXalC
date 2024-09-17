@@ -58,12 +58,22 @@ extern txc_node *txc_node_copy(txc_node *const from);
 
 extern void txc_node_free(txc_node *const node);
 
+/* CONVERT */
+
+extern struct txc_num_array *txc_node_to_num(txc_node *const node);
+
 /* NODE */
 
 extern txc_node *txc_node_simplify(txc_node *const node);
 
+/* PRINT */
+
 extern char *txc_node_to_str(const txc_node *const node);
 
 extern void txc_node_print(txc_node *const node);
+
+extern void txc_node_print_if_debug(txc_node *const node);
+
+extern void txc_node_simplify_and_print(txc_node *const node);
 
 #endif /* TXC_NODE */

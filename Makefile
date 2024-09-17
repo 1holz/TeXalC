@@ -11,7 +11,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -pedantic -I$(SRC) -Wno-alloc-size-larger-than
 
 RELEASE_CFLAGS = -Ofast -I$(RELEASE_DIR)
-DEBUG_CFLAGS = -std=c99 -D_POSIX_VERSION=200112L -D_POSIX_C_SOURCE=200112L -g -O0 -I$(DEBUG_DIR)
+DEBUG_CFLAGS = -std=c99 -DDEBUG -D_POSIX_VERSION=200112L -D_POSIX_C_SOURCE=200112L -g -O0 -I$(DEBUG_DIR)
 
 LEX = flex
 PAR = bison

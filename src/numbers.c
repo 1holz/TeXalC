@@ -59,7 +59,17 @@ static void num_array_assert_valid(const struct txc_num_array *const array)
     assert(array->used <= array->size);
 }
 
-/* NUM ARRAY */
+/* CONVERT */
+
+txc_node *txc_num_to_node(txc_num *const num)
+{
+    num_array_assert_valid(num);
+    union impl impl;
+    impl.natural_num = num;
+    return txc_node_create(NULL, impl, 0, TXC_NUM);
+}
+
+/* NUM */
 
 static struct txc_num_array *num_array_init(size_t size)
 {
@@ -276,27 +286,26 @@ txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len, uint
     for (; cur[0] == '0'; len--)
         cur++;
     size_t chars_per_elem = TXC_NUM_ARRAY_TYPE_WIDTH / width;
-    union impl impl;
-    impl.natural_num = num_array_init(len / chars_per_elem + 1);
+    txc_num *num = num_array_init(len / chars_per_elem + 1);
     if (len <= 0)
-        return txc_node_create(NULL, impl, 0, TXC_NUM);
-    if (impl.natural_num == NULL)
+        return txc_num_to_node(num);
+    if (num == NULL)
         return NULL;
     switch (base)
     {
     case 2:
-        impl.natural_num = num_array_from_bin_str(impl.natural_num, cur, len);
+        num = num_array_from_bin_str(num, cur, len);
         break;
     default: /* FALLTHROUGH */
     case 10:
-        impl.natural_num = num_array_from_dec_str(impl.natural_num, cur, len);
+        num = num_array_from_dec_str(num, cur, len);
         break;
     case 16:
-        impl.natural_num = num_array_from_hex_str(impl.natural_num, cur, len);
+        num = num_array_from_hex_str(num, cur, len);
         break;
     }
-    impl.natural_num = num_array_fit(impl.natural_num);
-    return txc_node_create(NULL, impl, 0, TXC_NUM);
+    num = num_array_fit(num);
+    return txc_num_to_node(num);
 }
 
 txc_num *txc_num_copy(txc_num *const from)
@@ -324,98 +333,81 @@ void txc_num_free(txc_num *const num)
 
 /* NUM */
 
-/*
 txc_num *txc_num_add(txc_num *const *const summands, const size_t len)
 {
-    // TODO assert valid
+    if (len > 0)
+    {
+        assert(summands != NULL);
+        for (size_t i = 0; i < len; i++)
+            num_array_assert_valid(summands[i]);
+    }
+    else
+    {
+        return num_array_init(0);
+    }
     txc_num *acc = NULL;
-    bool finish = false;
     for (size_t i = 0; i < len; i++)
     {
-        switch (summands[i]->type)
+        if (acc == NULL)
         {
-        case TXC_NAN:
-            acc = txc_copy_num(summands[i]);
-            finish = true;
-            break;
-        case TXC_NATURAL_NUM:
-            if (acc == NULL)
+            acc = txc_num_copy(summands[i]);
+            continue;
+        }
+        size_t larger_size = acc->used;
+        if (summands[i]->used > acc->used)
+            larger_size = summands[i]->used;
+        num_array_inc_amount(acc, larger_size);
+        if (acc->size < larger_size)
+        {
+            txc_num_free(acc);
+            return NULL;
+        }
+        bool carry = false;
+        for (size_t j = 0; j < larger_size; j++)
+        {
+            if (j >= acc->used)
             {
-                acc = txc_copy_num(summands[i]);
+                acc->data[acc->used] = 0;
+                acc->used++;
+            }
+            if (summands[i]->used <= j && !carry)
                 break;
-            }
-            struct txc_num_array *array = acc->impl.natural_num;
-            size_t larger_size = array->used;
-            if (summands[i]->impl.natural_num->used > array->used)
-                larger_size = summands[i]->impl.natural_num->used;
-            num_array_inc_amount(array, larger_size);
-            if (array->size < larger_size)
-            {
-                acc = (txc_num *)&TXC_NAN_ERROR_ALLOC;
-                finish = true;
-                break;
-            }
-            bool carry = false;
-            for (size_t j = 0; j < larger_size; j++)
-            {
-                if (j >= array->used)
-                {
-                    array->data[array->used] = 0;
-                    array->used++;
-                }
-                if (summands[i]->impl.natural_num->used <= j && !carry)
-                    break;
-                if (carry)
-                {
-                    if (array->data[j] >= TXC_NUM_ARRAY_TYPE_MAX)
-                    {
-                        array->data[j] = 0;
-                        carry = true;
-                    }
-                    else
-                    {
-                        array->data[j]++;
-                        carry = false;
-                    }
-                }
-                if (j < summands[i]->impl.natural_num->used)
-                {
-                    TXC_NUM_ARRAY_TYPE to_add = summands[i]->impl.natural_num->data[j];
-                    if (TXC_NUM_ARRAY_TYPE_MAX - array->data[j] < to_add)
-                        carry = true;
-                    array->data[j] += to_add;
-                }
-            }
             if (carry)
             {
-                if (array->used >= array->size && num_array_inc(array) <= 0)
+                if (acc->data[j] >= TXC_NUM_ARRAY_TYPE_MAX)
                 {
-                    acc = (txc_num *)&TXC_NAN_ERROR_ALLOC;
-                    finish = true;
-                    break;
+                    acc->data[j] = 0;
+                    carry = true;
                 }
-                array->data[array->used] = 1;
-                array->used++;
+                else
+                {
+                    acc->data[j]++;
+                    carry = false;
+                }
             }
-            break;
-        default:
-            fprintf(stderr, TXC_ERROR_INVALID_NUM_TYPE, summands[i]->type, __FILE__, __LINE__);
-            acc = (txc_num *)&TXC_NAN_ERROR_INVALID_NUM_TYPE;
-            finish = true;
-            break;
+            if (j < summands[i]->used)
+            {
+                TXC_NUM_ARRAY_TYPE to_add = summands[i]->data[j];
+                if (TXC_NUM_ARRAY_TYPE_MAX - acc->data[j] < to_add)
+                    carry = true;
+                acc->data[j] += to_add;
+            }
         }
-        if (finish)
-            break;
+        if (carry)
+        {
+            if (acc->used >= acc->size && num_array_inc(acc) <= 0)
+            {
+                txc_num_free(acc);
+                return NULL;
+            }
+            acc->data[acc->used] = 1;
+            acc->used++;
+        }
     }
-    for (size_t i = 0; i < len; i++)
-        txc_free_num(summands[i]);
-    if (acc == NULL)
-        acc = (txc_num *)&TXC_ZERO_ZERO;
-    if (acc->type == TXC_NATURAL_NUM)
-        num_array_fit(acc->impl.natural_num);
+    if (acc != NULL)
+        num_array_fit(acc);
     return acc;
 }
-*/
 
 const char *txc_num_to_str(txc_num *const num)
 {

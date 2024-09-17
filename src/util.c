@@ -24,6 +24,9 @@
 
 char *txc_strdup(const char *const str)
 {
+#if (_POSIX_VERSION >= 200809L)
+    return stpdup(str);
+#else /* _POSIX_VERSION >= 200809L */
     assert(str != NULL);
     size_t len = strlen(str);
     char *copy = malloc(len + 1);
@@ -31,6 +34,7 @@ char *txc_strdup(const char *const str)
         return NULL;
     memcpy(copy, str, len + 1);
     return copy;
+#endif /* _POSIX_VERSION >= 200809L */
 }
 
 char *txc_strrev(char *const str)
@@ -51,6 +55,10 @@ char *txc_strrev(char *const str)
 
 char *txc_stpcpy(char *restrict dst, const char *restrict src)
 {
+#if (_POSIX_VERSION >= 200809L)
+    return stpcpy(dst, src);
+#else /* _POSIX_VERSION >= 200809L */
     dst = strcpy(dst, src);
     return dst + strlen(src);
+#endif /* _POSIX_VERSION >= 200809L */
 }

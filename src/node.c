@@ -81,6 +81,15 @@ static void node_assert_valid(const struct txc_node *const node)
     assert(node->children_amount == 0 || node->children != NULL);
 }
 
+/* CONVERT */
+
+struct txc_num_array *txc_node_to_num(txc_node *const node)
+{
+    node_assert_valid(node);
+    assert(node->type);
+    return node->impl.natural_num;
+}
+
 /* CREATE, COPY AND FREE */
 
 txc_node *txc_create_nan(const char *const reason)
@@ -276,39 +285,116 @@ txc_node *txc_node_simplify(txc_node *const node)
             txc_node_free(copy);
             return node;
         }
-        size_t j = 0;
-        for (size_t i = 0; i < copy->children_amount; i++)
+        size_t ii = 0;
+        for (size_t j = 0; ii < copy->children_amount; j++)
         {
             if (node->children[j]->type != copy->type)
             {
-                copy->children[i] = txc_node_copy(node->children[j]);
-                j++;
-                continue;
+                copy->children[ii] = txc_node_copy(node->children[j]);
+                ii++;
             }
-            for (size_t k = 0; k < node->children[j]->children_amount && i < copy->children_amount; k++)
+            else
             {
-                copy->children[i] = txc_node_copy(node->children[j]->children[k]);
-                i++;
+                for (size_t k = 0; k < node->children[j]->children_amount && ii < copy->children_amount; k++)
+                {
+                    copy->children[ii] = txc_node_copy(node->children[j]->children[k]);
+                    ii++;
+                }
             }
-            txc_node_free(node->children[j]);
         }
         txc_node_free(node);
+        // TODO debug print if top level?
+        size_t num_i = 0;
+        size_t other_i = 0;
+        for (size_t i = 0; i < copy->children_amount; i++)
+            if (copy->children[i]->type == TXC_NUM)
+                num_i++;
+        if (num_i <= 0)
+            return copy;
+        txc_num *nums[num_i];
+        num_i = 0;
+        for (size_t i = 0; i < copy->children_amount; i++)
+        {
+            if (copy->children[i]->type == TXC_NUM)
+            {
+                nums[num_i] = txc_num_copy(txc_node_to_num(copy->children[i]));
+                if (nums[num_i] == NULL)
+                {
+                    for (size_t j = 0; j < num_i; j++)
+                        txc_num_free(nums[j]);
+                    for (size_t j = 0; j < other_i; j++)
+                        txc_node_free(copy->children[j]);
+                    for (size_t j = i; j < copy->children_amount; j++)
+                        txc_node_free(copy->children[j]);
+                    free(copy->children);
+                    copy->children_amount = 0;
+                    txc_node_free(copy);
+                    return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+                }
+                free(copy->children[i]);
+                num_i++;
+            }
+            else
+            {
+                copy->children[other_i] = copy->children[i];
+                other_i++;
+            }
+        }
+        copy->children_amount = other_i + 1;
+        struct txc_node **tmp = realloc(copy->children, sizeof tmp * copy->children_amount);
+        if (tmp == NULL)
+        {
+            for (size_t i = 0; i < num_i; i++)
+                txc_num_free(nums[i]);
+            txc_node_free(copy);
+            fprintf(stderr, TXC_ERROR_ALLOC, sizeof tmp * copy->children_amount, "others only children", __FILE__, __LINE__);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        copy->children = tmp;
+        txc_num *num;
         switch (copy->type)
         {
         case TXC_ADD:
-            txc_node_free(copy);
-            fprintf(stderr, TXC_ERROR_NYI, __FILE__, __LINE__);
-            return (txc_node *)&TXC_NAN_ERROR_NYI;
+            num = txc_num_add(nums, num_i);
+            break;
         case TXC_MUL:
+            for (size_t i = 0; i < num_i; i++)
+                txc_num_free(nums[i]);
+            copy->children_amount--;
             txc_node_free(copy);
             fprintf(stderr, TXC_ERROR_NYI, __FILE__, __LINE__);
             return (txc_node *)&TXC_NAN_ERROR_NYI;
         default:
+            for (size_t i = 0; i < num_i; i++)
+                txc_num_free(nums[i]);
+            copy->children_amount--;
             txc_node_free(copy);
             fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, copy->type, __FILE__, __LINE__);
             return (txc_node *)&TXC_NAN_ERROR_INVALID_NODE_TYPE;
         }
-        return node;
+        for (size_t i = 0; i < num_i; i++)
+            txc_num_free(nums[i]);
+        if (num == NULL)
+        {
+            copy->children_amount--;
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        txc_node *num_node = txc_num_to_node(num);
+        if (num_node == NULL)
+        {
+            copy->children_amount--;
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        if (copy->children_amount <= 1)
+        {
+            copy->children_amount--;
+            txc_node_free(copy);
+            return num_node;
+        }
+        copy->children[copy->children_amount - 1] = num_node;
+        return copy;
     }
     case TXC_NAN: /* FALLTHROUGH */
     case TXC_NUM: /* FALLTHROUGH */
@@ -316,6 +402,8 @@ txc_node *txc_node_simplify(txc_node *const node)
         return node;
     }
 }
+
+/* PRINT */
 
 static char *concat_children(struct txc_node **const children, const size_t amount, const char *const op)
 {
@@ -400,15 +488,20 @@ void txc_node_print(txc_node *const node)
         printf(TXC_PRINT_FORMAT, str);
         free(str);
     }
+}
+
+void txc_node_print_if_debug(txc_node *const node)
+{
+    node_assert_valid(node);
+#if DEBUG
+    txc_node_print(node);
+#endif /* DEBUG */
+}
+
+void txc_node_simplify_and_print(txc_node *const node)
+{
+    node_assert_valid(node);
+    txc_node_print_if_debug(node);
     txc_node *const simple_node = txc_node_simplify(node);
-    str = txc_node_to_str(simple_node);
-    if (str == NULL)
-    {
-        printf(TXC_PRINT_FORMAT_NEWLINE, TXC_PRINT_ERROR);
-    }
-    else
-    {
-        printf(TXC_PRINT_FORMAT_NEWLINE, str);
-        free(str);
-    }
+    txc_node_print(simple_node);
 }
