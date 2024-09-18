@@ -171,6 +171,14 @@ static struct txc_num_array *num_array_shift_bigger(struct txc_num_array *const 
     return array;
 }
 
+static struct txc_num_array *num_array_shift_bigger_amount(struct txc_num_array *array, size_t amount)
+{
+    num_array_assert_valid(array);
+    for (size_t i = 0; i < amount; i++)
+        array = num_array_shift_bigger(array);
+    return array;
+}
+
 static struct txc_num_array *num_array_shift_smaller(struct txc_num_array *const array)
 {
     num_array_assert_valid(array);
@@ -185,6 +193,14 @@ static struct txc_num_array *num_array_shift_smaller(struct txc_num_array *const
         cur++;
     }
     array->data[cur] >>= 1;
+    return array;
+}
+
+static struct txc_num_array *num_array_shift_smaller_amount(struct txc_num_array *array, size_t amount)
+{
+    num_array_assert_valid(array);
+    for (size_t i = 0; i < amount; i++)
+        array = num_array_shift_smaller(array);
     return array;
 }
 
@@ -345,25 +361,20 @@ txc_num *txc_num_add(txc_num *const *const summands, const size_t len)
     {
         return num_array_init(0);
     }
-    txc_num *acc = NULL;
-    for (size_t i = 0; i < len; i++)
+    txc_num *acc = txc_num_copy(summands[0]);
+    for (size_t i = 1; i < len; i++)
     {
-        if (acc == NULL)
-        {
-            acc = txc_num_copy(summands[i]);
-            continue;
-        }
-        size_t larger_size = acc->used;
+        size_t result_size = acc->used;
         if (summands[i]->used > acc->used)
-            larger_size = summands[i]->used;
-        num_array_inc_amount(acc, larger_size);
-        if (acc->size < larger_size)
+            result_size = summands[i]->used;
+        num_array_inc_amount(acc, result_size);
+        if (acc->size < result_size)
         {
             txc_num_free(acc);
             return NULL;
         }
         bool carry = false;
-        for (size_t j = 0; j < larger_size; j++)
+        for (size_t j = 0; j < result_size; j++)
         {
             if (j >= acc->used)
             {
@@ -408,6 +419,56 @@ txc_num *txc_num_add(txc_num *const *const summands, const size_t len)
         num_array_fit(acc);
     return acc;
 }
+
+txc_num *txc_num_mul(txc_num *const *const factors, const size_t len)
+{
+    if (len > 0)
+    {
+        assert(factors != NULL);
+        for (size_t i = 0; i < len; i++)
+            num_array_assert_valid(factors[i]);
+    }
+    else
+    {
+        return num_array_init(0);
+    }
+    for (size_t i = 0; i < len; i++)
+        if (factors[i]->used == 0)
+            return num_array_init(0);
+    txc_num *acc = txc_num_copy(factors[0]);
+    for (size_t i = 1; i < len; i++)
+    {
+        size_t result_size = acc->used + factors[i]->used;
+        num_array_inc_amount(acc, result_size);
+        if (acc->size < result_size)
+        {
+            txc_num_free(acc);
+            return NULL;
+        }
+        size_t summand_i = 0;
+        for (size_t j = 0; j < factors[i]->used; j++)
+            for (size_t k = 0; k < TXC_NUM_ARRAY_TYPE_WIDTH; k++)
+                summand_i++;
+        txc_num *summands[summand_i];
+        summand_i = 0;
+        for (size_t j = 0; j < factors[i]->used; j++)
+        {
+            for (size_t k = 0; k < TXC_NUM_ARRAY_TYPE_WIDTH; k++)
+            {
+                if (((factors[i]->data[j] >> k) & 1) == 0)
+                    continue;
+                summands[summand_i] = num_array_shift_bigger_amount(txc_num_copy(acc), j * TXC_NUM_ARRAY_TYPE_WIDTH + k);
+                summand_i++;
+            }
+        }
+        acc = txc_num_add(summands, summand_i);
+    }
+    if (acc != NULL)
+        num_array_fit(acc);
+    return acc;
+}
+
+/* PRINT */
 
 const char *txc_num_to_str(txc_num *const num)
 {

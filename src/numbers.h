@@ -45,6 +45,10 @@ extern txc_node *txc_num_to_node(txc_num *const num);
 
 extern txc_num *txc_num_add(txc_num *const *const summands, const size_t len);
 
+extern txc_num *txc_num_mul(txc_num *const *const factors, const size_t len);
+
+/* PRINT */
+
 extern const char *txc_num_to_str(txc_num *const num);
 
 #endif /* TXC_NUMBERS */

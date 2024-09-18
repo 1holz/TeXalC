@@ -341,7 +341,7 @@ txc_node *txc_node_simplify(txc_node *const node)
             }
         }
         copy->children_amount = other_i + 1;
-        struct txc_node **tmp = realloc(copy->children, sizeof tmp * copy->children_amount);
+        struct txc_node **tmp = realloc(copy->children, sizeof *tmp * copy->children_amount);
         if (tmp == NULL)
         {
             for (size_t i = 0; i < num_i; i++)
@@ -358,12 +358,8 @@ txc_node *txc_node_simplify(txc_node *const node)
             num = txc_num_add(nums, num_i);
             break;
         case TXC_MUL:
-            for (size_t i = 0; i < num_i; i++)
-                txc_num_free(nums[i]);
-            copy->children_amount--;
-            txc_node_free(copy);
-            fprintf(stderr, TXC_ERROR_NYI, __FILE__, __LINE__);
-            return (txc_node *)&TXC_NAN_ERROR_NYI;
+            num = txc_num_mul(nums, num_i);
+            break;
         default:
             for (size_t i = 0; i < num_i; i++)
                 txc_num_free(nums[i]);
