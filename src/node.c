@@ -23,17 +23,17 @@
 #include <stdio.h>
 
 #include "node.h"
-#include "numbers.h"
+#include "integers.h"
 #include "util.h"
 
 #define TXC_ERROR_NYI "Not yet implemented in %s line %d.\n"
 #define TXC_ERROR_ALLOC "Could not allocate %zu bytes of memory for %s in %s line %d.\n"
-#define TXC_ERROR_INVALID_NODE_TYPE "Number type %du is invalid in %s line %d.\n"
+#define TXC_ERROR_INVALID_NODE_TYPE "Node type %du is invalid in %s line %d.\n"
 
 #define TXC_NAN_REASON "\\text{NAN(%s)}"
 #define TXC_NAN_REASON_ERROR_ALLOC "Could not allocate enough memory. Please see stderr for more information."
 #define TXC_NAN_REASON_ERROR_NYI "Not yet implemented. Please see stderr for more information."
-#define TXC_NAN_REASON_ERROR_INVALID_NODE_TYPE "Number type is invalid. Please see stderr for more information."
+#define TXC_NAN_REASON_ERROR_INVALID_NODE_TYPE "Node type is invalid. Please see stderr for more information."
 #define TXC_NAN_REASON_UNSPECIFIED "unspecified"
 
 #define TXC_PRINT_FORMAT "= %s \\\\\n"
@@ -83,11 +83,11 @@ static void node_assert_valid(const struct txc_node *const node)
 
 /* CONVERT */
 
-struct txc_num_array *txc_node_to_num(txc_node *const node)
+struct txc_int *txc_node_to_int(txc_node *const node)
 {
     node_assert_valid(node);
     assert(node->type);
-    return node->impl.natural_num;
+    return node->impl.integer;
 }
 
 /* CREATE, COPY AND FREE */
@@ -199,11 +199,11 @@ txc_node *txc_node_copy(txc_node *const from)
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
         }
         break;
-    case TXC_NUM:
-        copy->impl.natural_num = txc_num_copy(from->impl.natural_num);
-        if (copy->impl.natural_num == NULL)
+    case TXC_INT:
+        copy->impl.integer = txc_int_copy(from->impl.integer);
+        if (copy->impl.integer == NULL)
         {
-            fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy natural number", __FILE__, __LINE__);
+            fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy integer", __FILE__, __LINE__);
             free(copy);
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
         }
@@ -230,8 +230,8 @@ void txc_node_free(txc_node *const node)
     case TXC_NAN:
         free(node->impl.reason);
         break;
-    case TXC_NUM:
-        txc_num_free(node->impl.natural_num);
+    case TXC_INT:
+        txc_int_free(node->impl.integer);
         break;
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL:
@@ -304,24 +304,24 @@ txc_node *txc_node_simplify(txc_node *const node)
         }
         txc_node_free(node);
         // TODO debug print if top level?
-        size_t num_i = 0;
+        size_t int_i = 0;
         size_t other_i = 0;
         for (size_t i = 0; i < copy->children_amount; i++)
-            if (copy->children[i]->type == TXC_NUM)
-                num_i++;
-        if (num_i <= 0)
+            if (copy->children[i]->type == TXC_INT)
+                int_i++;
+        if (int_i <= 0)
             return copy;
-        txc_num *nums[num_i];
-        num_i = 0;
+        txc_int *ints[int_i];
+        int_i = 0;
         for (size_t i = 0; i < copy->children_amount; i++)
         {
-            if (copy->children[i]->type == TXC_NUM)
+            if (copy->children[i]->type == TXC_INT)
             {
-                nums[num_i] = txc_num_copy(txc_node_to_num(copy->children[i]));
-                if (nums[num_i] == NULL)
+                ints[int_i] = txc_int_copy(txc_node_to_int(copy->children[i]));
+                if (ints[int_i] == NULL)
                 {
-                    for (size_t j = 0; j < num_i; j++)
-                        txc_num_free(nums[j]);
+                    for (size_t j = 0; j < int_i; j++)
+                        txc_int_free(ints[j]);
                     for (size_t j = 0; j < other_i; j++)
                         txc_node_free(copy->children[j]);
                     for (size_t j = i; j < copy->children_amount; j++)
@@ -332,7 +332,7 @@ txc_node *txc_node_simplify(txc_node *const node)
                     return (txc_node *)&TXC_NAN_ERROR_ALLOC;
                 }
                 free(copy->children[i]);
-                num_i++;
+                int_i++;
             }
             else
             {
@@ -344,40 +344,40 @@ txc_node *txc_node_simplify(txc_node *const node)
         struct txc_node **tmp = realloc(copy->children, sizeof *tmp * copy->children_amount);
         if (tmp == NULL)
         {
-            for (size_t i = 0; i < num_i; i++)
-                txc_num_free(nums[i]);
+            for (size_t i = 0; i < int_i; i++)
+                txc_int_free(ints[i]);
             txc_node_free(copy);
             fprintf(stderr, TXC_ERROR_ALLOC, sizeof tmp * copy->children_amount, "others only children", __FILE__, __LINE__);
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
         }
         copy->children = tmp;
-        txc_num *num;
+        txc_int *integer;
         switch (copy->type)
         {
         case TXC_ADD:
-            num = txc_num_add(nums, num_i);
+            integer = txc_int_add(ints, int_i);
             break;
         case TXC_MUL:
-            num = txc_num_mul(nums, num_i);
+            integer = txc_int_mul(ints, int_i);
             break;
         default:
-            for (size_t i = 0; i < num_i; i++)
-                txc_num_free(nums[i]);
+            for (size_t i = 0; i < int_i; i++)
+                txc_int_free(ints[i]);
             copy->children_amount--;
             txc_node_free(copy);
             fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, copy->type, __FILE__, __LINE__);
             return (txc_node *)&TXC_NAN_ERROR_INVALID_NODE_TYPE;
         }
-        for (size_t i = 0; i < num_i; i++)
-            txc_num_free(nums[i]);
-        if (num == NULL)
+        for (size_t i = 0; i < int_i; i++)
+            txc_int_free(ints[i]);
+        if (integer == NULL)
         {
             copy->children_amount--;
             txc_node_free(copy);
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
         }
-        txc_node *num_node = txc_num_to_node(num);
-        if (num_node == NULL)
+        txc_node *int_node = txc_int_to_node(integer);
+        if (int_node == NULL)
         {
             copy->children_amount--;
             txc_node_free(copy);
@@ -387,13 +387,13 @@ txc_node *txc_node_simplify(txc_node *const node)
         {
             copy->children_amount--;
             txc_node_free(copy);
-            return num_node;
+            return int_node;
         }
-        copy->children[copy->children_amount - 1] = num_node;
+        copy->children[copy->children_amount - 1] = int_node;
         return copy;
     }
     case TXC_NAN: /* FALLTHROUGH */
-    case TXC_NUM: /* FALLTHROUGH */
+    case TXC_INT: /* FALLTHROUGH */
     default:
         return node;
     }
@@ -453,8 +453,8 @@ char *txc_node_to_str(const txc_node *const node)
             snprintf(str, size, TXC_NAN_REASON, node->impl.reason);
         break;
     }
-    case TXC_NUM:
-        str = (char *)txc_num_to_str(node->impl.natural_num);
+    case TXC_INT:
+        str = (char *)txc_int_to_str(node->impl.integer);
         if (str == NULL)
             str = txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
         break;

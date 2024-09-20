@@ -16,8 +16,13 @@
  *
  */
 
+#ifndef TXC_UTIL
+#define TXC_UTIL
+
 extern char *txc_strdup(const char *const str);
 
 extern char *txc_strrev(char *const str);
 
 extern char *txc_stpcpy(char *restrict dst, const char *restrict src);
+
+#endif /* TXC_UTIL */

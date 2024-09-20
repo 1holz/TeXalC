@@ -25,7 +25,7 @@ enum txc_node_type
 {
     TXC_NAN,
 
-    TXC_NUM,
+    TXC_INT,
 
     TXC_ADD,
     TXC_MUL
@@ -34,7 +34,7 @@ enum txc_node_type
 union impl
 {
     char *reason;
-    struct txc_num_array *natural_num;
+    struct txc_int *integer;
 };
 
 typedef struct txc_node txc_node;
@@ -60,7 +60,7 @@ extern void txc_node_free(txc_node *const node);
 
 /* CONVERT */
 
-extern struct txc_num_array *txc_node_to_num(txc_node *const node);
+extern struct txc_int *txc_node_to_int(txc_node *const node);
 
 /* NODE */
 

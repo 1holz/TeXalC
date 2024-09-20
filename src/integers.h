@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef TXC_NUMBERS
-#define TXC_NUMBERS
+#ifndef TXC_INTEGERS
+#define TXC_INTEGERS
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -27,28 +27,28 @@
 
 /* DEFINITIONS */
 
-typedef struct txc_num_array txc_num;
+typedef struct txc_int txc_int;
 
 /* CREATE, COPY AND FREE */
 
-extern txc_node *txc_create_natural_num_or_zero(const char *const str, size_t len, uint_fast8_t base);
+extern txc_node *txc_create_int(const char *const str, size_t len, uint_fast8_t base);
 
-extern txc_num *txc_num_copy(txc_num *const from);
+extern txc_int *txc_int_copy(txc_int *const from);
 
-extern void txc_num_free(txc_num *const num);
+extern void txc_int_free(txc_int *const integer);
 
 /* CONVERT */
 
-extern txc_node *txc_num_to_node(txc_num *const num);
+extern txc_node *txc_int_to_node(txc_int *const integer);
 
-/* NUM */
+/* INT */
 
-extern txc_num *txc_num_add(txc_num *const *const summands, const size_t len);
+extern txc_int *txc_int_add(txc_int *const *const summands, const size_t len);
 
-extern txc_num *txc_num_mul(txc_num *const *const factors, const size_t len);
+extern txc_int *txc_int_mul(txc_int *const *const factors, const size_t len);
 
 /* PRINT */
 
-extern const char *txc_num_to_str(txc_num *const num);
+extern const char *txc_int_to_str(txc_int *const integer);
 
-#endif /* TXC_NUMBERS */
+#endif /* TXC_INTEGERS */

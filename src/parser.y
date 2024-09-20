@@ -26,7 +26,7 @@
 %code requires
 {
     #include "node.h"
-    #include "numbers.h"
+    #include "integers.h"
 
     struct pascal_str
     {
@@ -41,12 +41,12 @@
     txc_node *node;
 }
 
-%token <pascal_str> BIN_NUM_N DEC_NUM_N HEX_NUM_N
+%token <pascal_str> BIN_INT DEC_INT HEX_INT
 %token ADD
 %token MUL
 %token END
 
-%type <node> sum prod num_n
+%type <node> sum prod int
 
 %start expr
 
@@ -63,14 +63,14 @@ sum:
 ;
 
 prod:
-  num_n
-| prod MUL num_n  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
+  int
+| prod MUL int  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
 ;
 
-num_n:
-  BIN_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len, 2); }
-| DEC_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len, 10); }
-| HEX_NUM_N { $$ = txc_create_natural_num_or_zero($1.str, $1.len, 16); }
+int:
+  BIN_INT { $$ = txc_create_int($1.str, $1.len, 2); }
+| DEC_INT { $$ = txc_create_int($1.str, $1.len, 10); }
+| HEX_INT { $$ = txc_create_int($1.str, $1.len, 16); }
 ;
 
 %%
