@@ -42,29 +42,38 @@
 }
 
 %token <pascal_str> BIN_INT DEC_INT HEX_INT
-%token ADD
-%token MUL
+%token PLUS
+%token MINUS
+%token CDOT
+%token L_PAREN
+%token R_PAREN
 %token END
 
-%type <node> sum prod int
+%type <node> sum prod paren int
 
 %start expr
 
 %%
 
 expr:
-  %empty
-| expr sum END  { txc_node_simplify_and_print($2); }
+  /* empty */
+| sum END  { txc_node_simplify_and_print($1); }
 ;
 
 sum:
   prod
-| sum ADD prod  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); }
+| sum PLUS prod  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); }
 ;
 
 prod:
-  int
-| prod MUL int  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
+  paren
+| int
+| prod CDOT paren  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
+| prod CDOT int    { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
+;
+
+paren:
+  L_PAREN sum R_PAREN  { $$ = $2; }
 ;
 
 int:

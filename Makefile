@@ -17,7 +17,7 @@ LEX = flex
 PAR = bison
 
 LEX_FLAGS = --warn
-PAR_FLAGS = --header -Wall -Wdangling-alias -Wcounterexamples -fcaret -ffixit
+PAR_FLAGS = --header -Wall -Wdangling-alias -Wcounterexamples -fcaret -ffixit -Wno-empty-rule
 RELEASE_LEX_FLAGS =
 DEBUG_LEX_FLAGS = --debug --perf-report --perf-report --nodefault --posix# --lex-compat --verbose
 RELEASE_PAR_FLAGS =

@@ -42,8 +42,8 @@ typedef struct txc_node txc_node;
 /* CONSTANTS */
 
 extern const txc_node TXC_NAN_ERROR_ALLOC;
-extern const txc_node TXC_NAN_ERROR_NYI;
 extern const txc_node TXC_NAN_ERROR_INVALID_NODE_TYPE;
+extern const txc_node TXC_NAN_ERROR_NYI;
 extern const txc_node TXC_NAN_UNSPECIFIED;
 
 /* CREATE, COPY AND FREE */
@@ -52,7 +52,7 @@ extern txc_node *txc_create_nan(const char *const reason);
 
 extern txc_node *txc_create_bin_op(const enum txc_node_type type, txc_node *const operand_1, txc_node *const operand_2);
 
-extern txc_node *txc_node_create(struct txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type);
+extern txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type);
 
 extern txc_node *txc_node_copy(txc_node *const from);
 

@@ -51,8 +51,9 @@
 #define TXC_INT_ARRAY_TYPE_MAX UCHAR_MAX
 #define TXC_INT_ARRAY_TYPE_WIDTH CHAR_BIT
 
-#define TXC_ERROR_NYI "Not yet implemented in %s line %d.\n"
 #define TXC_ERROR_ALLOC "Could not allocate %zu bytes of memory for %s in %s line %d.\n"
+#define TXC_ERROR_NYI "Not yet implemented in %s line %d.\n"
+#define TXC_ERROR_OVERFLOW "Overflow was caught for %s in %s line %d.\n"
 
 /* DEFINITIONS */
 
@@ -187,7 +188,7 @@ static struct txc_int *int_shift_bigger(struct txc_int *const integer)
     return integer;
 }
 
-static struct txc_int *int_shift_bigger_size(struct txc_int *integer, size_t amount)
+static struct txc_int *int_shift_bigger_amount(struct txc_int *integer, size_t amount)
 {
     int_assert_valid(integer);
     for (size_t i = 0; i < amount; i++)
@@ -474,7 +475,7 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
             {
                 if (((factors[i]->data[j] >> k) & 1) == 0)
                     continue;
-                summands[summand_i] = int_shift_bigger_size(txc_int_copy(acc), j * TXC_INT_ARRAY_TYPE_WIDTH + k);
+                summands[summand_i] = int_shift_bigger_amount(txc_int_copy(acc), j * TXC_INT_ARRAY_TYPE_WIDTH + k);
                 summand_i++;
             }
         }
@@ -490,7 +491,11 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
 const char *txc_int_to_str(txc_int *const integer)
 {
     int_assert_valid(integer);
-    // TODO handle to large?
+    if (integer->used > ((SIZE_MAX - 1) / 3) / (TXC_INT_ARRAY_TYPE_WIDTH / CHAR_BIT))
+    {
+        fprintf(stderr, TXC_ERROR_OVERFLOW, "integer decimal string buffer", __FILE__, __LINE__);
+        return NULL;
+    }
     const size_t max_len = TXC_INT_ARRAY_TYPE_WIDTH / CHAR_BIT * 3 * integer->used + 1;
     char *str = malloc(max_len);
     if (str == NULL)

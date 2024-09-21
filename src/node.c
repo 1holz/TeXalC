@@ -26,13 +26,13 @@
 #include "integers.h"
 #include "util.h"
 
-#define TXC_ERROR_NYI "Not yet implemented in %s line %d.\n"
 #define TXC_ERROR_ALLOC "Could not allocate %zu bytes of memory for %s in %s line %d.\n"
 #define TXC_ERROR_INVALID_NODE_TYPE "Node type %du is invalid in %s line %d.\n"
+#define TXC_ERROR_NYI "Not yet implemented in %s line %d.\n"
 
 #define TXC_NAN_REASON "\\text{NAN(%s)}"
-#define TXC_NAN_REASON_ERROR_ALLOC "Could not allocate enough memory. Please see stderr for more information."
 #define TXC_NAN_REASON_ERROR_NYI "Not yet implemented. Please see stderr for more information."
+#define TXC_NAN_REASON_ERROR_ALLOC "Could not allocate enough memory. Please see stderr for more information."
 #define TXC_NAN_REASON_ERROR_INVALID_NODE_TYPE "Node type is invalid. Please see stderr for more information."
 #define TXC_NAN_REASON_UNSPECIFIED "unspecified"
 
@@ -58,16 +58,16 @@ const txc_node TXC_NAN_ERROR_ALLOC = {.children = NULL,
                                       .children_amount = 0,
                                       .type = TXC_NAN,
                                       .read_only = true};
-const txc_node TXC_NAN_ERROR_NYI = {.children = NULL,
-                                    .impl.reason = TXC_NAN_REASON_ERROR_NYI,
-                                    .children_amount = 0,
-                                    .type = TXC_NAN,
-                                    .read_only = true};
 const txc_node TXC_NAN_ERROR_INVALID_NODE_TYPE = {.children = NULL,
                                                   .impl.reason = TXC_NAN_REASON_ERROR_INVALID_NODE_TYPE,
                                                   .children_amount = 0,
                                                   .type = TXC_NAN,
                                                   .read_only = true};
+const txc_node TXC_NAN_ERROR_NYI = {.children = NULL,
+                                    .impl.reason = TXC_NAN_REASON_ERROR_NYI,
+                                    .children_amount = 0,
+                                    .type = TXC_NAN,
+                                    .read_only = true};
 const txc_node TXC_NAN_UNSPECIFIED = {.children = NULL,
                                       .impl.reason = TXC_NAN_REASON_UNSPECIFIED,
                                       .children_amount = 0,
@@ -143,7 +143,7 @@ txc_node *txc_create_bin_op(const enum txc_node_type type, txc_node *const opera
     return node;
 }
 
-txc_node *txc_node_create(struct txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type)
+txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type)
 {
     txc_node *node = malloc(sizeof *node);
     if (node == NULL)
@@ -401,9 +401,9 @@ txc_node *txc_node_simplify(txc_node *const node)
 
 /* PRINT */
 
-static char *concat_children(struct txc_node **const children, const size_t amount, const char *const op)
+static char *concat_children_in_paren(struct txc_node **const children, const size_t amount, const char *const op)
 {
-    size_t size = 1 + 3 * (amount - 1) + 1;
+    size_t size = 1 + strlen(op) * (amount - 1) + 1;
     char *child_strs[amount];
     for (size_t i = 0; i < amount; i++)
     {
@@ -419,7 +419,7 @@ static char *concat_children(struct txc_node **const children, const size_t amou
     char *const buf = malloc(sizeof *buf * (size + 1));
     if (buf == NULL)
     {
-        fprintf(stderr, TXC_ERROR_ALLOC, size, "combined string", __FILE__, __LINE__);
+        fprintf(stderr, TXC_ERROR_ALLOC, size, "concatinated string", __FILE__, __LINE__);
         for (size_t i = 0; i < amount; i++)
             free(child_strs[i]);
         return txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
@@ -459,10 +459,10 @@ char *txc_node_to_str(const txc_node *const node)
             str = txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
         break;
     case TXC_ADD:
-        str = concat_children(node->children, node->children_amount, " + ");
+        str = concat_children_in_paren(node->children, node->children_amount, " + ");
         break;
     case TXC_MUL:
-        str = concat_children(node->children, node->children_amount, " * ");
+        str = concat_children_in_paren(node->children, node->children_amount, " \\cdot ");
         break;
     default:
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, node->type, __FILE__, __LINE__);
