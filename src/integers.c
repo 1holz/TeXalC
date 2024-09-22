@@ -592,7 +592,7 @@ const char *txc_int_to_str(txc_int *const integer)
         char *str = malloc(2);
         if (str == NULL)
         {
-            fprintf(stderr, TXC_ERROR_ALLOC, 2, "zero string", __FILE__, __LINE__);
+            fprintf(stderr, TXC_ERROR_ALLOC, (size_t) 2, "zero string", __FILE__, __LINE__);
             return NULL;
         }
         str[0] = '0';

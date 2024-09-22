@@ -49,7 +49,7 @@
 %token R_PAREN
 %token END
 
-%type <node> sum prod neg paren int
+%type <node> sum prod signd paren int
 
 %start expr
 
@@ -67,14 +67,15 @@ sum:
 ;
 
 prod:
-  neg
-| prod CDOT neg  { $$ = txc_node_create_bin_op(TXC_MUL, $1, $3); }
+  signd
+| prod CDOT signd  { $$ = txc_node_create_bin_op(TXC_MUL, $1, $3); }
 ;
 
-neg:
+signd:
   paren
 | int
-| MINUS neg  { $$ = txc_node_create_un_op(TXC_NEG, $2); }
+| MINUS signd  { $$ = txc_node_create_un_op(TXC_NEG, $2); }
+| PLUS signd  { $$ = $2; }
 ;
 
 paren:
