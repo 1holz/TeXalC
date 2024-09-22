@@ -49,7 +49,7 @@
 %token R_PAREN
 %token END
 
-%type <node> sum prod paren int
+%type <node> sum prod neg paren int
 
 %start expr
 
@@ -57,19 +57,24 @@
 
 expr:
   /* empty */
-| sum END  { txc_node_simplify_and_print($1); }
+| expr sum END  { txc_node_simplify_and_print($2); }
 ;
 
 sum:
   prod
-| sum PLUS prod  { $$ = txc_create_bin_op(TXC_ADD, $1, $3); }
+| sum PLUS prod   { $$ = txc_node_create_bin_op(TXC_ADD, $1, $3); }
+| sum MINUS prod  { $$ = txc_node_create_bin_op(TXC_ADD, $1, txc_node_create_un_op(TXC_NEG, $3)); }
 ;
 
 prod:
+  neg
+| prod CDOT neg  { $$ = txc_node_create_bin_op(TXC_MUL, $1, $3); }
+;
+
+neg:
   paren
 | int
-| prod CDOT paren  { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
-| prod CDOT int    { $$ = txc_create_bin_op(TXC_MUL, $1, $3); }
+| MINUS neg  { $$ = txc_node_create_un_op(TXC_NEG, $2); }
 ;
 
 paren:
@@ -77,9 +82,9 @@ paren:
 ;
 
 int:
-  BIN_INT { $$ = txc_create_int($1.str, $1.len, 2); }
-| DEC_INT { $$ = txc_create_int($1.str, $1.len, 10); }
-| HEX_INT { $$ = txc_create_int($1.str, $1.len, 16); }
+  BIN_INT { $$ = txc_int_create_int($1.str, $1.len, 2); }
+| DEC_INT { $$ = txc_int_create_int($1.str, $1.len, 10); }
+| HEX_INT { $$ = txc_int_create_int($1.str, $1.len, 16); }
 ;
 
 %%

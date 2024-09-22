@@ -70,8 +70,11 @@ struct txc_int
 static void int_assert_valid(const struct txc_int *const integer)
 {
     assert(integer != NULL);
-    assert(integer->size == 0 || integer->data != NULL);
     assert(integer->used <= integer->size);
+    if (integer->size > 0)
+        assert(integer->data != NULL);
+    if (integer->used > 0)
+        assert(integer->data[integer->used - 1] > 0);
 }
 
 /* CONVERT */
@@ -209,7 +212,17 @@ static struct txc_int *int_shift_smaller(struct txc_int *const integer)
             integer->data[cur] += TXC_INT_ARRAY_TYPE_MAX / 2 + 1;
         cur++;
     }
-    integer->data[cur] >>= 1;
+    integer->data[integer->used] >>= 1;
+    if (integer->data[integer->used] == 0)
+    {
+        integer->used--;
+        if (integer->used <= 0)
+        {
+            free(integer->data);
+            integer->neg = false;
+            integer->size = 0;
+        }
+    }
     return integer;
 }
 
@@ -217,7 +230,11 @@ static struct txc_int *int_shift_smaller_amount(struct txc_int *integer, size_t 
 {
     int_assert_valid(integer);
     for (size_t i = 0; i < amount; i++)
+    {
         integer = int_shift_smaller(integer);
+        if (integer->used <= 0)
+            break;
+    }
     return integer;
 }
 
@@ -305,7 +322,7 @@ static struct txc_int *int_from_hex_str(struct txc_int *integer, const char *con
 
 /* CREATE, COPY AND FREE */
 
-txc_node *txc_create_int(const char *const str, size_t len, uint_fast8_t base)
+txc_node *txc_int_create_int(const char *const str, size_t len, uint_fast8_t base)
 {
     if (base != 2 && base != 10 && base != 16)
     {
@@ -367,6 +384,51 @@ void txc_int_free(txc_int *const integer)
 
 /* INT */
 
+int_fast8_t txc_int_cmp_abs(const txc_int *const a, const txc_int *const b)
+{
+    int_assert_valid(a);
+    int_assert_valid(b);
+    if (a->used == 0 && b->used == 0)
+        return 0;
+    if (a->used < b->used)
+        return -1;
+    if (a->used > b->used)
+        return 1;
+    size_t used = a->used;
+    for (size_t i = 0; i < used; i++)
+    {
+        if (a->data[used - i - 1] < b->data[used - i - 1])
+            return -1;
+        if (a->data[used - i - 1] > b->data[used - i - 1])
+            return 1;
+    }
+    return 0;
+}
+
+int_fast8_t txc_int_cmp(const txc_int *const a, const txc_int *const b)
+{
+    int_assert_valid(a);
+    int_assert_valid(b);
+    if (a->used == 0 && b->used == 0)
+        return 0;
+    if (a->neg && !b->neg)
+        return 1;
+    if (!a->neg && b->neg)
+        return -1;
+    return txc_int_cmp_abs(a, b) * (a->neg && b->neg ? -1 : 1);
+}
+
+txc_int *txc_int_neg(txc_int *const integer)
+{
+    int_assert_valid(integer);
+    struct txc_int *result = txc_int_copy(integer);
+    txc_int_free(integer);
+    if (result == NULL)
+        return NULL;
+    result->neg = !result->neg;
+    return result;
+}
+
 txc_int *txc_int_add(txc_int *const *const summands, const size_t len)
 {
     if (len > 0)
@@ -379,58 +441,88 @@ txc_int *txc_int_add(txc_int *const *const summands, const size_t len)
     {
         return int_init(0);
     }
-    txc_int *acc = txc_int_copy(summands[0]);
-    for (size_t i = 1; i < len; i++)
+    struct txc_int *acc = int_init(0);
+    if (acc == NULL)
+        return NULL;
+    for (size_t i = 0; i < len; i++)
     {
-        size_t result_size = acc->used;
-        if (summands[i]->used > acc->used)
-            result_size = summands[i]->used;
-        int_inc_size(acc, result_size);
-        if (acc->size < result_size)
-        {
-            txc_int_free(acc);
-            return NULL;
-        }
+        if (summands[i]->used <= 0)
+            continue;
         bool carry = false;
-        for (size_t j = 0; j < result_size; j++)
+        if (acc->neg != summands[i]->neg)
         {
-            if (j >= acc->used)
+            int_fast8_t abs_cmp = txc_int_cmp_abs(acc, summands[i]);
+            if (abs_cmp == 0)
             {
-                acc->data[acc->used] = 0;
-                acc->used++;
+                txc_int_free(acc);
+                acc = int_init(0);
+                continue;
             }
-            if (summands[i]->used <= j && !carry)
-                break;
-            if (carry)
+            struct txc_int *smaller = acc;
+            if (abs_cmp < 0)
+                acc = txc_int_copy(summands[i]);
+            else
+                smaller = txc_int_copy(summands[i]);
+            for (size_t j = 0; j < acc->used; j++)
             {
-                if (acc->data[j] >= TXC_INT_ARRAY_TYPE_MAX)
+                if (smaller->used <= j && !carry)
+                    break;
+                if (carry)
                 {
-                    acc->data[j] = 0;
-                    carry = true;
+                    carry = acc->data[j] <= 0;
+                    acc->data[j]--;
                 }
-                else
+                if (j < smaller->used)
                 {
-                    acc->data[j]++;
-                    carry = false;
+                    if (acc->data[j] < smaller->data[j])
+                        carry = true;
+                    acc->data[j] -= smaller->data[j];
                 }
             }
-            if (j < summands[i]->used)
-            {
-                TXC_INT_ARRAY_TYPE to_add = summands[i]->data[j];
-                if (TXC_INT_ARRAY_TYPE_MAX - acc->data[j] < to_add)
-                    carry = true;
-                acc->data[j] += to_add;
-            }
+            txc_int_free(smaller);
         }
-        if (carry)
+        else
         {
-            if (acc->used >= acc->size && int_inc(acc) <= 0)
+            size_t result_size = acc->used;
+            if (summands[i]->used > acc->used)
+                result_size = summands[i]->used;
+            int_inc_size(acc, result_size);
+            if (acc->size < result_size)
             {
                 txc_int_free(acc);
                 return NULL;
             }
-            acc->data[acc->used] = 1;
-            acc->used++;
+            for (size_t j = 0; j < result_size; j++)
+            {
+                if (j >= acc->used)
+                {
+                    acc->data[acc->used] = 0;
+                    acc->used++;
+                }
+                if (summands[i]->used <= j && !carry)
+                    break;
+                if (carry)
+                {
+                    carry = acc->data[j] >= TXC_INT_ARRAY_TYPE_MAX;
+                    acc->data[j]++;
+                }
+                if (j < summands[i]->used)
+                {
+                    if (TXC_INT_ARRAY_TYPE_MAX - acc->data[j] < summands[i]->data[j])
+                        carry = true;
+                    acc->data[j] += summands[i]->data[j];
+                }
+            }
+            if (carry)
+            {
+                if (acc->used >= acc->size && int_inc(acc) <= 0)
+                {
+                    txc_int_free(acc);
+                    return NULL;
+                }
+                acc->data[acc->used] = 1;
+                acc->used++;
+            }
         }
     }
     if (acc != NULL)
@@ -453,9 +545,12 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
     for (size_t i = 0; i < len; i++)
         if (factors[i]->used == 0)
             return int_init(0);
+    bool neg = factors[0]->neg;
     txc_int *acc = txc_int_copy(factors[0]);
     for (size_t i = 1; i < len; i++)
     {
+        if (factors[i]->neg)
+            neg = !neg;
         size_t result_size = acc->used + factors[i]->used;
         int_inc_size(acc, result_size);
         if (acc->size < result_size)
@@ -483,6 +578,7 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
     }
     if (acc != NULL)
         int_fit(acc);
+    acc->neg = neg;
     return acc;
 }
 
@@ -491,12 +587,24 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
 const char *txc_int_to_str(txc_int *const integer)
 {
     int_assert_valid(integer);
-    if (integer->used > ((SIZE_MAX - 1) / 3) / (TXC_INT_ARRAY_TYPE_WIDTH / CHAR_BIT))
+    if (integer->used == 0)
+    {
+        char *str = malloc(2);
+        if (str == NULL)
+        {
+            fprintf(stderr, TXC_ERROR_ALLOC, 2, "zero string", __FILE__, __LINE__);
+            return NULL;
+        }
+        str[0] = '0';
+        str[1] = 0;
+        return str;
+    }
+    if (integer->used > ((SIZE_MAX - 1 - 3) / 3) / (TXC_INT_ARRAY_TYPE_WIDTH / CHAR_BIT))
     {
         fprintf(stderr, TXC_ERROR_OVERFLOW, "integer decimal string buffer", __FILE__, __LINE__);
         return NULL;
     }
-    const size_t max_len = TXC_INT_ARRAY_TYPE_WIDTH / CHAR_BIT * 3 * integer->used + 1;
+    const size_t max_len = TXC_INT_ARRAY_TYPE_WIDTH / CHAR_BIT * 3 * integer->used + 1 + 3;
     char *str = malloc(max_len);
     if (str == NULL)
     {
@@ -533,8 +641,8 @@ const char *txc_int_to_str(txc_int *const integer)
     {
         str[len - 1] = 0;
         for (size_t i = 0; i < int_len; i++)
-            str[i + 2] += 48;
-        str = txc_strrev(str + 2);
+            str[int_len - i - 1 + 2] = str[int_len - i - 1] + 48;
+        str = txc_strrev(str + 2) - 2;
         str[0] = '(';
         str[1] = '-';
         str[len - 1] = ')';

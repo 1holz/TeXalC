@@ -92,7 +92,23 @@ struct txc_int *txc_node_to_int(txc_node *const node)
 
 /* CREATE, COPY AND FREE */
 
-txc_node *txc_create_nan(const char *const reason)
+txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type)
+{
+    txc_node *node = malloc(sizeof *node);
+    if (node == NULL)
+    {
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *node, "node", __FILE__, __LINE__);
+        return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+    }
+    node->children = children;
+    node->impl = impl;
+    node->children_amount = children_amount;
+    node->type = type;
+    node->read_only = false;
+    return node;
+}
+
+txc_node *txc_node_create_nan(const char *const reason)
 {
     if (reason == NULL)
         return (txc_node *)&TXC_NAN_UNSPECIFIED;
@@ -114,7 +130,43 @@ txc_node *txc_create_nan(const char *const reason)
     return nan;
 }
 
-txc_node *txc_create_bin_op(const enum txc_node_type type, txc_node *const operand_1, txc_node *const operand_2)
+static txc_node *init_op(const enum txc_node_type type, struct txc_node **children, size_t children_amount)
+{
+    txc_node *node = malloc(sizeof *node);
+    if (node == NULL)
+    {
+        for (size_t i = 0; i < children_amount; i++)
+            txc_node_free(children[i]);
+        free(children);
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *node, "operation node", __FILE__, __LINE__);
+        return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+    }
+    node->children_amount = children_amount;
+    node->children = children;
+    node->type = type;
+    node->read_only = false;
+    return node;
+}
+
+txc_node *txc_node_create_un_op(const enum txc_node_type type, txc_node *const operand)
+{
+    if (type != TXC_NEG)
+    {
+        fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, type, __FILE__, __LINE__);
+        return (txc_node *)&TXC_NAN_ERROR_INVALID_NODE_TYPE;
+    }
+    size_t arity = 1;
+    struct txc_node **children = malloc(sizeof *children * arity);
+    if (children == NULL)
+    {
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof children * arity, "unary operation node children", __FILE__, __LINE__);
+        return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+    }
+    children[0] = operand;
+    return init_op(type, children, arity);
+}
+
+txc_node *txc_node_create_bin_op(const enum txc_node_type type, txc_node *const operand_1, txc_node *const operand_2)
 {
     if (type != TXC_ADD && type != TXC_MUL)
     {
@@ -122,41 +174,16 @@ txc_node *txc_create_bin_op(const enum txc_node_type type, txc_node *const opera
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, type, __FILE__, __LINE__);
         return (txc_node *)&TXC_NAN_ERROR_INVALID_NODE_TYPE;
     }
-    txc_node *node = malloc(sizeof *node);
-    if (node == NULL)
+    size_t arity = 2;
+    struct txc_node **children = malloc(sizeof *children * arity);
+    if (children == NULL)
     {
-        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *node, "binary operation node", __FILE__, __LINE__);
+        fprintf(stderr, TXC_ERROR_ALLOC, sizeof children * arity, "binary operation node children", __FILE__, __LINE__);
         return (txc_node *)&TXC_NAN_ERROR_ALLOC;
     }
-    node->children_amount = 2;
-    node->children = malloc(sizeof *node->children * node->children_amount);
-    if (node->children == NULL)
-    {
-        fprintf(stderr, TXC_ERROR_ALLOC, sizeof node->children * node->children_amount, "binary operation node children", __FILE__, __LINE__);
-        free(node);
-        return (txc_node *)&TXC_NAN_ERROR_ALLOC;
-    }
-    node->children[0] = operand_1;
-    node->children[1] = operand_2;
-    node->type = type;
-    node->read_only = false;
-    return node;
-}
-
-txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type)
-{
-    txc_node *node = malloc(sizeof *node);
-    if (node == NULL)
-    {
-        fprintf(stderr, TXC_ERROR_ALLOC, sizeof *node, "node", __FILE__, __LINE__);
-        return (txc_node *)&TXC_NAN_ERROR_ALLOC;
-    }
-    node->children = children;
-    node->impl = impl;
-    node->children_amount = children_amount;
-    node->type = type;
-    node->read_only = false;
-    return node;
+    children[0] = operand_1;
+    children[1] = operand_2;
+    return init_op(type, children, arity);
 }
 
 txc_node *txc_node_copy(txc_node *const from)
@@ -208,6 +235,7 @@ txc_node *txc_node_copy(txc_node *const from)
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
         }
         break;
+    case TXC_NEG: /* FALLTHROUGH */
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL: /* FALLTHROUGH */
     default:
@@ -233,6 +261,7 @@ void txc_node_free(txc_node *const node)
     case TXC_INT:
         txc_int_free(node->impl.integer);
         break;
+    case TXC_NEG: /* FALLTHROUGH */
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL:
         break;
@@ -263,6 +292,29 @@ txc_node *txc_node_simplify(txc_node *const node)
     }
     switch (node->type)
     {
+    case TXC_NEG:
+        switch (node->children[0]->type)
+        {
+        case TXC_INT:
+        {
+            txc_int *result = txc_int_copy(node->children[0]->impl.integer);
+            txc_node_free(node);
+            if (result == NULL)
+                return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+            return txc_int_to_node(txc_int_neg(result));
+        }
+        case TXC_NEG:
+        {
+            txc_node *result = txc_node_copy(node->children[0]->children[0]);
+            txc_node_free(node);
+            if (result == NULL)
+                return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+            return result;
+        }
+        // TODO
+        default:
+            return node;
+        }
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL:
     {
@@ -401,9 +453,9 @@ txc_node *txc_node_simplify(txc_node *const node)
 
 /* PRINT */
 
-static char *concat_children_in_paren(struct txc_node **const children, const size_t amount, const char *const op)
+static char *concat_children_in_paren(struct txc_node **const children, const size_t amount, const char *const pre, const char *const op, const char *const post)
 {
-    size_t size = 1 + strlen(op) * (amount - 1) + 1;
+    size_t size = strlen(pre) + strlen(op) * (amount - 1) + strlen(post);
     char *child_strs[amount];
     for (size_t i = 0; i < amount; i++)
     {
@@ -424,14 +476,14 @@ static char *concat_children_in_paren(struct txc_node **const children, const si
             free(child_strs[i]);
         return txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
     }
-    char *cur = txc_stpcpy(buf, "(");
+    char *cur = txc_stpcpy(buf, pre);
     for (size_t i = 0; i < amount; i++)
     {
         if (i > 0)
             cur = txc_stpcpy(cur, op);
         cur = txc_stpcpy(cur, child_strs[i]);
     }
-    txc_stpcpy(cur, ")");
+    txc_stpcpy(cur, post);
     for (size_t i = 0; i < amount; i++)
         free(child_strs[i]);
     return buf;
@@ -458,11 +510,14 @@ char *txc_node_to_str(const txc_node *const node)
         if (str == NULL)
             str = txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
         break;
+    case TXC_NEG:
+        str = concat_children_in_paren(node->children, node->children_amount, "(-", "", ")");
+        break;
     case TXC_ADD:
-        str = concat_children_in_paren(node->children, node->children_amount, " + ");
+        str = concat_children_in_paren(node->children, node->children_amount, "(", " + ", ")");
         break;
     case TXC_MUL:
-        str = concat_children_in_paren(node->children, node->children_amount, " \\cdot ");
+        str = concat_children_in_paren(node->children, node->children_amount, "(", " \\cdot ", ")");
         break;
     default:
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, node->type, __FILE__, __LINE__);
