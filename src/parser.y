@@ -41,15 +41,14 @@
     txc_node *node;
 }
 
+%token L_PAREN R_PAREN
+%token L_BRACE R_BRACE
+%token PLUS MINUS
+%token CDOT FRAC
 %token <pascal_str> BIN_INT DEC_INT HEX_INT
-%token PLUS
-%token MINUS
-%token CDOT
-%token L_PAREN
-%token R_PAREN
 %token END
 
-%type <node> sum prod signd paren int
+%type <node> sum prod signd frac paren int
 
 %start expr
 
@@ -72,10 +71,15 @@ prod:
 ;
 
 signd:
+  frac
+| MINUS signd  { $$ = txc_node_create_un_op(TXC_NEG, $2); }
+| PLUS signd   { $$ = $2; }
+;
+
+frac:
   paren
 | int
-| MINUS signd  { $$ = txc_node_create_un_op(TXC_NEG, $2); }
-| PLUS signd  { $$ = $2; }
+| FRAC L_BRACE frac R_BRACE L_BRACE frac R_BRACE { $$ = txc_node_create_bin_op(TXC_FRAC, $3, $6); }
 ;
 
 paren:

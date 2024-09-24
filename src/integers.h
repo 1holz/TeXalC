@@ -29,11 +29,13 @@
 
 typedef struct txc_int txc_int;
 
-/* CREATE, COPY AND FREE */
+/* MEMORY */
 
 extern txc_node *txc_int_create_int(const char *const str, size_t len, uint_fast8_t base);
 
-extern txc_int *txc_int_copy(txc_int *const from);
+extern txc_int *txc_int_copy_read(txc_int *const from);
+
+extern txc_int *txc_int_copy_write(txc_int *const from);
 
 extern void txc_int_free(txc_int *const integer);
 

@@ -320,7 +320,9 @@ static struct txc_int *int_from_hex_str(struct txc_int *integer, const char *con
     return integer;
 }
 
-/* CREATE, COPY AND FREE */
+/* MEMORY */
+
+static void bake(const struct txc_int *const integer) {}
 
 txc_node *txc_int_create_int(const char *const str, size_t len, uint_fast8_t base)
 {
@@ -355,10 +357,16 @@ txc_node *txc_int_create_int(const char *const str, size_t len, uint_fast8_t bas
         break;
     }
     integer = int_fit(integer);
+    bake(integer);
     return txc_int_to_node(integer);
 }
 
-txc_int *txc_int_copy(txc_int *const from)
+txc_int *txc_int_copy_read(txc_int *const from)
+{
+    return txc_int_copy_write(from);
+}
+
+txc_int *txc_int_copy_write(txc_int *const from)
 {
     int_assert_valid(from);
     txc_int *copy = int_init(from->used);
@@ -421,11 +429,12 @@ int_fast8_t txc_int_cmp(const txc_int *const a, const txc_int *const b)
 txc_int *txc_int_neg(txc_int *const integer)
 {
     int_assert_valid(integer);
-    struct txc_int *result = txc_int_copy(integer);
+    struct txc_int *result = txc_int_copy_write(integer);
     txc_int_free(integer);
     if (result == NULL)
         return NULL;
     result->neg = !result->neg;
+    bake(result);
     return result;
 }
 
@@ -460,9 +469,9 @@ txc_int *txc_int_add(txc_int *const *const summands, const size_t len)
             }
             struct txc_int *smaller = acc;
             if (abs_cmp < 0)
-                acc = txc_int_copy(summands[i]);
+                acc = txc_int_copy_write(summands[i]);
             else
-                smaller = txc_int_copy(summands[i]);
+                smaller = txc_int_copy_write(summands[i]);
             for (size_t j = 0; j < acc->used; j++)
             {
                 if (smaller->used <= j && !carry)
@@ -527,6 +536,7 @@ txc_int *txc_int_add(txc_int *const *const summands, const size_t len)
     }
     if (acc != NULL)
         int_fit(acc);
+    bake(acc);
     return acc;
 }
 
@@ -546,7 +556,7 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
         if (factors[i]->used == 0)
             return int_init(0);
     bool neg = factors[0]->neg;
-    txc_int *acc = txc_int_copy(factors[0]);
+    txc_int *acc = txc_int_copy_write(factors[0]);
     for (size_t i = 1; i < len; i++)
     {
         if (factors[i]->neg)
@@ -570,7 +580,7 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
             {
                 if (((factors[i]->data[j] >> k) & 1) == 0)
                     continue;
-                summands[summand_i] = int_shift_bigger_amount(txc_int_copy(acc), j * TXC_INT_ARRAY_TYPE_WIDTH + k);
+                summands[summand_i] = int_shift_bigger_amount(txc_int_copy_write(acc), j * TXC_INT_ARRAY_TYPE_WIDTH + k);
                 summand_i++;
             }
         }
@@ -579,6 +589,7 @@ txc_int *txc_int_mul(txc_int *const *const factors, const size_t len)
     if (acc != NULL)
         int_fit(acc);
     acc->neg = neg;
+    bake(acc);
     return acc;
 }
 
@@ -592,7 +603,7 @@ const char *txc_int_to_str(txc_int *const integer)
         char *str = malloc(2);
         if (str == NULL)
         {
-            fprintf(stderr, TXC_ERROR_ALLOC, (size_t) 2, "zero string", __FILE__, __LINE__);
+            fprintf(stderr, TXC_ERROR_ALLOC, (size_t)2, "zero string", __FILE__, __LINE__);
             return NULL;
         }
         str[0] = '0';

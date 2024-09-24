@@ -30,7 +30,8 @@ enum txc_node_type
     TXC_NEG,
 
     TXC_ADD,
-    TXC_MUL
+    TXC_MUL,
+    TXC_FRAC
 };
 
 union impl
@@ -48,7 +49,7 @@ extern const txc_node TXC_NAN_ERROR_INVALID_NODE_TYPE;
 extern const txc_node TXC_NAN_ERROR_NYI;
 extern const txc_node TXC_NAN_UNSPECIFIED;
 
-/* CREATE, COPY AND FREE */
+/* MEMORY */
 
 extern txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type);
 
@@ -58,7 +59,9 @@ extern txc_node *txc_node_create_un_op(const enum txc_node_type type, txc_node *
 
 extern txc_node *txc_node_create_bin_op(const enum txc_node_type type, txc_node *const operand_1, txc_node *const operand_2);
 
-extern txc_node *txc_node_copy(txc_node *const from);
+extern txc_node *txc_node_copy_read(txc_node *const from);
+
+extern txc_node *txc_node_copy_write(txc_node *const from);
 
 extern void txc_node_free(txc_node *const node);
 

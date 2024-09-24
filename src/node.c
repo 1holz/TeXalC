@@ -90,7 +90,9 @@ struct txc_int *txc_node_to_int(txc_node *const node)
     return node->impl.integer;
 }
 
-/* CREATE, COPY AND FREE */
+/* MEMORY */
+
+static void bake(const struct txc_node *const node) {}
 
 txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type)
 {
@@ -105,6 +107,7 @@ txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_
     node->children_amount = children_amount;
     node->type = type;
     node->read_only = false;
+    bake(node);
     return node;
 }
 
@@ -127,6 +130,7 @@ txc_node *txc_node_create_nan(const char *const reason)
     }
     nan->type = TXC_NAN;
     nan->read_only = false;
+    bake(nan);
     return nan;
 }
 
@@ -145,6 +149,7 @@ static txc_node *init_op(const enum txc_node_type type, struct txc_node **childr
     node->children = children;
     node->type = type;
     node->read_only = false;
+    bake(node);
     return node;
 }
 
@@ -168,7 +173,7 @@ txc_node *txc_node_create_un_op(const enum txc_node_type type, txc_node *const o
 
 txc_node *txc_node_create_bin_op(const enum txc_node_type type, txc_node *const operand_1, txc_node *const operand_2)
 {
-    if (type != TXC_ADD && type != TXC_MUL)
+    if (type != TXC_ADD && type != TXC_MUL && type != TXC_FRAC)
     {
 
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, type, __FILE__, __LINE__);
@@ -186,7 +191,7 @@ txc_node *txc_node_create_bin_op(const enum txc_node_type type, txc_node *const 
     return init_op(type, children, arity);
 }
 
-txc_node *txc_node_copy(txc_node *const from)
+static struct txc_node *node_copy(struct txc_node *const from, bool write)
 {
     node_assert_valid(from);
     if (from->read_only)
@@ -210,7 +215,7 @@ txc_node *txc_node_copy(txc_node *const from)
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
         }
         for (size_t i = 0; i < copy->children_amount; i++)
-            copy->children[i] = txc_node_copy(from->children[i]);
+            copy->children[i] = write ? txc_node_copy_write(from->children[i]) : txc_node_copy_read(from->children[i]);
     }
     switch (copy->type)
     {
@@ -227,7 +232,7 @@ txc_node *txc_node_copy(txc_node *const from)
         }
         break;
     case TXC_INT:
-        copy->impl.integer = txc_int_copy(from->impl.integer);
+        copy->impl.integer = write ? txc_int_copy_write(from->impl.integer) : txc_int_copy_read(from->impl.integer);
         if (copy->impl.integer == NULL)
         {
             fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy integer", __FILE__, __LINE__);
@@ -242,6 +247,16 @@ txc_node *txc_node_copy(txc_node *const from)
         break;
     }
     return copy;
+}
+
+txc_node *txc_node_copy_read(txc_node *const from)
+{
+    return node_copy(from, false);
+}
+
+txc_node *txc_node_copy_write(txc_node *const from)
+{
+    return node_copy(from, true);
 }
 
 void txc_node_free(txc_node *const node)
@@ -297,7 +312,7 @@ txc_node *txc_node_simplify(txc_node *const node)
         {
         case TXC_INT:
         {
-            txc_int *result = txc_int_copy(node->children[0]->impl.integer);
+            txc_int *result = txc_int_copy_read(node->children[0]->impl.integer);
             txc_node_free(node);
             if (result == NULL)
                 return (txc_node *)&TXC_NAN_ERROR_ALLOC;
@@ -305,7 +320,7 @@ txc_node *txc_node_simplify(txc_node *const node)
         }
         case TXC_NEG:
         {
-            txc_node *result = txc_node_copy(node->children[0]->children[0]);
+            txc_node *result = txc_node_copy_read(node->children[0]->children[0]);
             txc_node_free(node);
             if (result == NULL)
                 return (txc_node *)&TXC_NAN_ERROR_ALLOC;
@@ -318,7 +333,7 @@ txc_node *txc_node_simplify(txc_node *const node)
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL:
     {
-        txc_node *const copy = txc_node_copy(node);
+        txc_node *const copy = txc_node_copy_write(node);
         assert(copy->read_only == false);
         copy->children_amount = 0;
         for (size_t i = 0; i < node->children_amount; i++)
@@ -342,14 +357,14 @@ txc_node *txc_node_simplify(txc_node *const node)
         {
             if (node->children[j]->type != copy->type)
             {
-                copy->children[ii] = txc_node_copy(node->children[j]);
+                copy->children[ii] = txc_node_copy_read(node->children[j]);
                 ii++;
             }
             else
             {
                 for (size_t k = 0; k < node->children[j]->children_amount && ii < copy->children_amount; k++)
                 {
-                    copy->children[ii] = txc_node_copy(node->children[j]->children[k]);
+                    copy->children[ii] = txc_node_copy_read(node->children[j]->children[k]);
                     ii++;
                 }
             }
@@ -369,7 +384,7 @@ txc_node *txc_node_simplify(txc_node *const node)
         {
             if (copy->children[i]->type == TXC_INT)
             {
-                ints[int_i] = txc_int_copy(txc_node_to_int(copy->children[i]));
+                ints[int_i] = txc_int_copy_read(txc_node_to_int(copy->children[i]));
                 if (ints[int_i] == NULL)
                 {
                     for (size_t j = 0; j < int_i; j++)
@@ -442,6 +457,7 @@ txc_node *txc_node_simplify(txc_node *const node)
             return int_node;
         }
         copy->children[copy->children_amount - 1] = int_node;
+        bake(copy);
         return copy;
     }
     case TXC_NAN: /* FALLTHROUGH */

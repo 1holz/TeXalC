@@ -29,11 +29,14 @@
 
 %%
 
+\(                 { return L_PAREN; }
+\)                 { return R_PAREN; }
+\{                 { return L_BRACE; }
+\}                 { return R_BRACE; }
 \+                 { return PLUS; }
 \-                 { return MINUS; }
 \\cdot             { return CDOT; }
-\(                 { return L_PAREN; }
-\)                 { return R_PAREN; }
+\\frac             { return FRAC; }
 0[bB][01]+         { yylval.pascal_str.str = yytext + 2; yylval.pascal_str.len = yyleng - 2; return BIN_INT; }
 [0-9]+             { yylval.pascal_str.str = yytext; yylval.pascal_str.len = yyleng; return DEC_INT; }
 0[xX][0-9A-Fa-f]+  { yylval.pascal_str.str = yytext + 2; yylval.pascal_str.len = yyleng - 2; return HEX_INT; }
