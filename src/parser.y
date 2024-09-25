@@ -41,55 +41,43 @@
     txc_node *node;
 }
 
-%token L_PAREN R_PAREN
-%token L_BRACE R_BRACE
-%token PLUS MINUS
-%token CDOT FRAC
 %token <pascal_str> BIN_INT DEC_INT HEX_INT
+%left PLUS MINUS
+%left CDOT FRAC
+%token L_PAREN R_PAREN L_BRACE R_BRACE
 %token END
 
-%type <node> sum prod signd frac paren int
+%type <node> expr int
 
-%start expr
+%start input
 
 %%
 
-expr:
+input:
   /* empty */
-| expr sum END  { txc_node_simplify_and_print($2); }
+| input line
 ;
 
-sum:
-  prod
-| sum PLUS prod   { $$ = txc_node_create_bin_op(TXC_ADD, $1, $3); }
-| sum MINUS prod  { $$ = txc_node_create_bin_op(TXC_ADD, $1, txc_node_create_un_op(TXC_NEG, $3)); }
+line:
+  END
+| expr END     { txc_node_simplify_and_print($1); }
 ;
 
-prod:
-  signd
-| prod CDOT signd  { $$ = txc_node_create_bin_op(TXC_MUL, $1, $3); }
-;
-
-signd:
-  frac
-| MINUS signd  { $$ = txc_node_create_un_op(TXC_NEG, $2); }
-| PLUS signd   { $$ = $2; }
-;
-
-frac:
-  paren
-| int
-| FRAC L_BRACE frac R_BRACE L_BRACE frac R_BRACE { $$ = txc_node_create_bin_op(TXC_FRAC, $3, $6); }
-;
-
-paren:
-  L_PAREN sum R_PAREN  { $$ = $2; }
+expr:
+  int
+| expr PLUS expr                                 { $$ = txc_node_create_bin_op(TXC_ADD, $1, $3); }
+| expr MINUS expr                                { $$ = txc_node_create_bin_op(TXC_ADD, $1, txc_node_create_un_op(TXC_NEG, $3)); }
+| expr CDOT expr                                 { $$ = txc_node_create_bin_op(TXC_MUL, $1, $3); }
+| FRAC L_BRACE expr R_BRACE L_BRACE expr R_BRACE { $$ = txc_node_create_bin_op(TXC_FRAC, $6, $3); }
+| L_PAREN expr R_PAREN                           { $$ = $2; }
 ;
 
 int:
-  BIN_INT { $$ = txc_int_create_int($1.str, $1.len, 2); }
-| DEC_INT { $$ = txc_int_create_int($1.str, $1.len, 10); }
-| HEX_INT { $$ = txc_int_create_int($1.str, $1.len, 16); }
+  BIN_INT   { $$ = txc_int_create_int($1.str, $1.len, 2); }
+| DEC_INT   { $$ = txc_int_create_int($1.str, $1.len, 10); }
+| HEX_INT   { $$ = txc_int_create_int($1.str, $1.len, 16); }
+| MINUS int { $$ = txc_node_create_un_op(TXC_NEG, $2); }
+| PLUS int  { $$ = $2; }
 ;
 
 %%
