@@ -78,7 +78,8 @@ const txc_node TXC_NAN_UNSPECIFIED = {.children = NULL,
 
 static void node_assert_valid(const struct txc_node *const node)
 {
-    assert(node->children_amount == 0 || node->children != NULL);
+    if (node->children_amount != 0)
+        assert(node->children != NULL);
 }
 
 /* CONVERT */
@@ -92,7 +93,10 @@ struct txc_int *txc_node_to_int(txc_node *const node)
 
 /* MEMORY */
 
-static void bake(const struct txc_node *const node) {}
+static struct txc_node *bake(struct txc_node *const node)
+{
+    return node;
+}
 
 txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type)
 {
@@ -107,8 +111,7 @@ txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_
     node->children_amount = children_amount;
     node->type = type;
     node->read_only = false;
-    bake(node);
-    return node;
+    return bake(node);
 }
 
 txc_node *txc_node_create_nan(const char *const reason)
@@ -130,8 +133,7 @@ txc_node *txc_node_create_nan(const char *const reason)
     }
     nan->type = TXC_NAN;
     nan->read_only = false;
-    bake(nan);
-    return nan;
+    return bake(nan);
 }
 
 static txc_node *init_op(const enum txc_node_type type, struct txc_node **children, size_t children_amount)
@@ -149,13 +151,12 @@ static txc_node *init_op(const enum txc_node_type type, struct txc_node **childr
     node->children = children;
     node->type = type;
     node->read_only = false;
-    bake(node);
-    return node;
+    return bake(node);
 }
 
 txc_node *txc_node_create_un_op(const enum txc_node_type type, txc_node *const operand)
 {
-    if (type != TXC_NEG)
+    if (type != TXC_NEG && type != TXC_FRAC)
     {
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, type, __FILE__, __LINE__);
         return (txc_node *)&TXC_NAN_ERROR_INVALID_NODE_TYPE;
@@ -224,9 +225,12 @@ static struct txc_node *node_copy(struct txc_node *const from, bool write)
         if (copy->impl.reason == NULL)
         {
             fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy reason", __FILE__, __LINE__);
+            if (copy->children_amount > 0)
+            {
             for (size_t i = 0; i < copy->children_amount; i++)
                 txc_node_free(from->children[i]);
             free(copy->children);
+            }
             free(copy);
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
         }
@@ -243,7 +247,10 @@ static struct txc_node *node_copy(struct txc_node *const from, bool write)
     case TXC_NEG: /* FALLTHROUGH */
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL: /* FALLTHROUGH */
+    case TXC_FRAC:
+        break;
     default:
+        fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, copy->type, __FILE__, __LINE__);
         break;
     }
     return copy;
@@ -278,7 +285,8 @@ void txc_node_free(txc_node *const node)
         break;
     case TXC_NEG: /* FALLTHROUGH */
     case TXC_ADD: /* FALLTHROUGH */
-    case TXC_MUL:
+    case TXC_MUL: /* FALLTHROUGH */
+    case TXC_FRAC:
         break;
     default:
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, node->type, __FILE__, __LINE__);
@@ -322,8 +330,6 @@ txc_node *txc_node_simplify(txc_node *const node)
         {
             txc_node *result = txc_node_copy_read(node->children[0]->children[0]);
             txc_node_free(node);
-            if (result == NULL)
-                return (txc_node *)&TXC_NAN_ERROR_ALLOC;
             return result;
         }
         // TODO
@@ -334,6 +340,11 @@ txc_node *txc_node_simplify(txc_node *const node)
     case TXC_MUL:
     {
         txc_node *const copy = txc_node_copy_write(node);
+        if (copy->type == TXC_NAN)
+        {
+            txc_node_free(copy);
+            return node;
+        }
         assert(copy->read_only == false);
         copy->children_amount = 0;
         for (size_t i = 0; i < node->children_amount; i++)
@@ -435,8 +446,6 @@ txc_node *txc_node_simplify(txc_node *const node)
             fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, copy->type, __FILE__, __LINE__);
             return (txc_node *)&TXC_NAN_ERROR_INVALID_NODE_TYPE;
         }
-        for (size_t i = 0; i < int_i; i++)
-            txc_int_free(ints[i]);
         if (integer == NULL)
         {
             copy->children_amount--;
@@ -469,13 +478,13 @@ txc_node *txc_node_simplify(txc_node *const node)
 
 /* PRINT */
 
-static char *concat_children_in_paren(struct txc_node **const children, const size_t amount, const char *const pre, const char *const op, const char *const post)
+static char *concat_children_in_paren(struct txc_node **const children, const size_t amount, const bool reverse_children, const char *const pre, const char *const op, const char *const post)
 {
     size_t size = strlen(pre) + strlen(op) * (amount - 1) + strlen(post);
     char *child_strs[amount];
     for (size_t i = 0; i < amount; i++)
     {
-        child_strs[i] = txc_node_to_str(children[i]);
+        child_strs[i] = txc_node_to_str(children[reverse_children ? amount - i - 1 : i]);
         if (child_strs[i] == NULL)
         {
             for (size_t j = 0; j < i; j++)
@@ -527,13 +536,19 @@ char *txc_node_to_str(const txc_node *const node)
             str = txc_node_to_str((txc_node *)&TXC_NAN_ERROR_ALLOC);
         break;
     case TXC_NEG:
-        str = concat_children_in_paren(node->children, node->children_amount, "(-", "", ")");
+        str = concat_children_in_paren(node->children, node->children_amount, false, "(-", "", ")");
         break;
     case TXC_ADD:
-        str = concat_children_in_paren(node->children, node->children_amount, "(", " + ", ")");
+        str = concat_children_in_paren(node->children, node->children_amount, false, "(", " + ", ")");
         break;
     case TXC_MUL:
-        str = concat_children_in_paren(node->children, node->children_amount, "(", " \\cdot ", ")");
+        str = concat_children_in_paren(node->children, node->children_amount, false, "(", " \\cdot ", ")");
+        break;
+    case TXC_FRAC:
+        if (node->children_amount == 1)
+            str = concat_children_in_paren(node->children, node->children_amount, true, "\\frac{1}{", "", "}");
+        else
+            str = concat_children_in_paren(node->children, node->children_amount, true, "\\frac{", "}{", "}");
         break;
     default:
         fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, node->type, __FILE__, __LINE__);
