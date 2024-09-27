@@ -48,6 +48,7 @@ extern const txc_node TXC_NAN_ERROR_ALLOC;
 extern const txc_node TXC_NAN_ERROR_INVALID_NODE_TYPE;
 extern const txc_node TXC_NAN_ERROR_NYI;
 extern const txc_node TXC_NAN_UNSPECIFIED;
+extern const txc_node TXC_NAN_ZERO_DIVISION;
 
 /* MEMORY */
 
@@ -59,9 +60,9 @@ extern txc_node *txc_node_create_un_op(const enum txc_node_type type, txc_node *
 
 extern txc_node *txc_node_create_bin_op(const enum txc_node_type type, txc_node *const operand_1, txc_node *const operand_2);
 
-extern txc_node *txc_node_copy_read(txc_node *const from);
+extern txc_node *txc_node_copy_read(const txc_node *const from);
 
-extern txc_node *txc_node_copy_write(txc_node *const from);
+extern txc_node *txc_node_copy_write(const txc_node *const from);
 
 extern void txc_node_free(txc_node *const node);
 

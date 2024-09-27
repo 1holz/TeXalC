@@ -19,6 +19,12 @@
 #ifndef TXC_UTIL
 #define TXC_UTIL
 
+struct txc_size_t_tuple
+{
+    size_t a;
+    size_t b;
+};
+
 extern char *txc_strdup(const char *const str);
 
 extern char *txc_strrev(char *const str);

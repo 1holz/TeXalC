@@ -35,6 +35,7 @@
 #define TXC_NAN_REASON_ERROR_ALLOC "Could not allocate enough memory. Please see stderr for more information."
 #define TXC_NAN_REASON_ERROR_INVALID_NODE_TYPE "Node type is invalid. Please see stderr for more information."
 #define TXC_NAN_REASON_UNSPECIFIED "unspecified"
+#define TXC_NAN_REASON_ZERO_DIVISION "Divided by 0."
 
 #define TXC_PRINT_FORMAT "= %s \\\\\n"
 #define TXC_PRINT_FORMAT_NEWLINE "= %s \\\\\n\n"
@@ -73,13 +74,42 @@ const txc_node TXC_NAN_UNSPECIFIED = {.children = NULL,
                                       .children_amount = 0,
                                       .type = TXC_NAN,
                                       .read_only = true};
+const txc_node TXC_NAN_ZERO_DIVISION = {.children = NULL,
+                                        .impl.reason = TXC_NAN_REASON_ZERO_DIVISION,
+                                        .children_amount = 0,
+                                        .type = TXC_NAN,
+                                        .read_only = true};
 
 /* ASSERTS */
 
 static void node_assert_valid(const struct txc_node *const node)
 {
-    if (node->children_amount != 0)
+    assert(node != NULL);
+    switch (node->type)
+    {
+    case TXC_INT:
+        assert(node->children_amount == 0);
+        // TODO assert int?
+        break;
+    case TXC_NEG:
+        assert(node->children_amount == 1);
+        break;
+    case TXC_FRAC:
+        assert(node->children_amount >= 1 && node->children_amount <= 2);
+        break;
+    case TXC_NAN: /* FALLTHROUGH */
+    case TXC_ADD: /* FALLTHROUGH */
+    case TXC_MUL:
+        break;
+    default:
+        fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, node->type, __FILE__, __LINE__);
+        break;
+    }
+    if (node->children_amount <= 0)
+        return;
         assert(node->children != NULL);
+    for (size_t i = 0; i < node->children_amount; i++)
+        node_assert_valid(node->children[i]);
 }
 
 /* CONVERT */
@@ -95,6 +125,7 @@ struct txc_int *txc_node_to_int(txc_node *const node)
 
 static struct txc_node *bake(struct txc_node *const node)
 {
+    node_assert_valid(node);
     return node;
 }
 
@@ -192,11 +223,11 @@ txc_node *txc_node_create_bin_op(const enum txc_node_type type, txc_node *const 
     return init_op(type, children, arity);
 }
 
-static struct txc_node *node_copy(struct txc_node *const from, bool write)
+static struct txc_node *node_copy(const struct txc_node *const from, bool write)
 {
     node_assert_valid(from);
     if (from->read_only)
-        return from;
+        return (struct txc_node *)from;
     txc_node *copy = malloc(sizeof *copy);
     if (copy == NULL)
     {
@@ -227,8 +258,9 @@ static struct txc_node *node_copy(struct txc_node *const from, bool write)
             fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy reason", __FILE__, __LINE__);
             if (copy->children_amount > 0)
             {
+                // TODO why free them instead of copying?
             for (size_t i = 0; i < copy->children_amount; i++)
-                txc_node_free(from->children[i]);
+                    txc_node_free(copy->children[i]);
             free(copy->children);
             }
             free(copy);
@@ -256,13 +288,14 @@ static struct txc_node *node_copy(struct txc_node *const from, bool write)
     return copy;
 }
 
-txc_node *txc_node_copy_read(txc_node *const from)
+txc_node *txc_node_copy_read(const txc_node *const from)
 {
+    node_assert_valid(from);
     return node_copy(from, false);
 }
 
-txc_node *txc_node_copy_write(txc_node *const from)
-{
+txc_node *txc_node_copy_write(const txc_node *const from)
+{    node_assert_valid(from);
     return node_copy(from, true);
 }
 
@@ -299,6 +332,7 @@ void txc_node_free(txc_node *const node)
 
 txc_node *txc_node_simplify(txc_node *const node)
 {
+    node_assert_valid(node);
     for (size_t i = 0; i < node->children_amount; i++)
     {
         node->children[i] = txc_node_simplify(node->children[i]);
@@ -389,27 +423,15 @@ txc_node *txc_node_simplify(txc_node *const node)
                 int_i++;
         if (int_i <= 0)
             return copy;
-        txc_int *ints[int_i];
+        const txc_int *ints[int_i];
+        txc_node *int_nodes[int_i];
         int_i = 0;
         for (size_t i = 0; i < copy->children_amount; i++)
         {
             if (copy->children[i]->type == TXC_INT)
             {
-                ints[int_i] = txc_int_copy_read(txc_node_to_int(copy->children[i]));
-                if (ints[int_i] == NULL)
-                {
-                    for (size_t j = 0; j < int_i; j++)
-                        txc_int_free(ints[j]);
-                    for (size_t j = 0; j < other_i; j++)
-                        txc_node_free(copy->children[j]);
-                    for (size_t j = i; j < copy->children_amount; j++)
-                        txc_node_free(copy->children[j]);
-                    free(copy->children);
-                    copy->children_amount = 0;
-                    txc_node_free(copy);
-                    return (txc_node *)&TXC_NAN_ERROR_ALLOC;
-                }
-                free(copy->children[i]);
+                ints[int_i] = txc_node_to_int(copy->children[i]);
+                int_nodes[int_i] = copy->children[i];
                 int_i++;
             }
             else
@@ -422,8 +444,6 @@ txc_node *txc_node_simplify(txc_node *const node)
         struct txc_node **tmp = realloc(copy->children, sizeof *tmp * copy->children_amount);
         if (tmp == NULL)
         {
-            for (size_t i = 0; i < int_i; i++)
-                txc_int_free(ints[i]);
             txc_node_free(copy);
             fprintf(stderr, TXC_ERROR_ALLOC, sizeof tmp * copy->children_amount, "others only children", __FILE__, __LINE__);
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
@@ -440,12 +460,14 @@ txc_node *txc_node_simplify(txc_node *const node)
             break;
         default:
             for (size_t i = 0; i < int_i; i++)
-                txc_int_free(ints[i]);
+                txc_node_free(int_nodes[i]);
             copy->children_amount--;
             txc_node_free(copy);
             fprintf(stderr, TXC_ERROR_INVALID_NODE_TYPE, copy->type, __FILE__, __LINE__);
             return (txc_node *)&TXC_NAN_ERROR_INVALID_NODE_TYPE;
         }
+        for (size_t i = 0; i < int_i; i++)
+            txc_node_free(int_nodes[i]);
         if (integer == NULL)
         {
             copy->children_amount--;
