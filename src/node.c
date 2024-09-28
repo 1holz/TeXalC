@@ -107,7 +107,7 @@ static void node_assert_valid(const struct txc_node *const node)
     }
     if (node->children_amount <= 0)
         return;
-        assert(node->children != NULL);
+    assert(node->children != NULL);
     for (size_t i = 0; i < node->children_amount; i++)
         node_assert_valid(node->children[i]);
 }
@@ -117,7 +117,7 @@ static void node_assert_valid(const struct txc_node *const node)
 struct txc_int *txc_node_to_int(txc_node *const node)
 {
     node_assert_valid(node);
-    assert(node->type);
+    assert(node->type == TXC_INT);
     return node->impl.integer;
 }
 
@@ -258,10 +258,9 @@ static struct txc_node *node_copy(const struct txc_node *const from, bool write)
             fprintf(stderr, TXC_ERROR_ALLOC, sizeof *copy, "copy reason", __FILE__, __LINE__);
             if (copy->children_amount > 0)
             {
-                // TODO why free them instead of copying?
-            for (size_t i = 0; i < copy->children_amount; i++)
+                for (size_t i = 0; i < copy->children_amount; i++)
                     txc_node_free(copy->children[i]);
-            free(copy->children);
+                free(copy->children);
             }
             free(copy);
             return (txc_node *)&TXC_NAN_ERROR_ALLOC;
@@ -295,7 +294,8 @@ txc_node *txc_node_copy_read(const txc_node *const from)
 }
 
 txc_node *txc_node_copy_write(const txc_node *const from)
-{    node_assert_valid(from);
+{
+    node_assert_valid(from);
     return node_copy(from, true);
 }
 
@@ -488,8 +488,254 @@ txc_node *txc_node_simplify(txc_node *const node)
             return int_node;
         }
         copy->children[copy->children_amount - 1] = int_node;
-        bake(copy);
-        return copy;
+        return bake(copy);
+    }
+    case TXC_FRAC:
+    {
+        if (node->children[0]->type == TXC_INT && txc_int_is_zero(node->children[0]->impl.integer))
+        {
+            txc_node_free(node);
+            return (txc_node *)&TXC_NAN_ZERO_DIVISION;
+        }
+        txc_node *copy = txc_node_copy_write(node);
+        bool neg = false;
+        if (copy->children[0]->type == TXC_INT && txc_int_is_neg(copy->children[0]->impl.integer))
+        {
+            neg = true;
+            copy->children[0] = txc_node_simplify(txc_node_create_un_op(TXC_NEG, copy->children[0]));
+        }
+        else if (copy->children[0]->type == TXC_NEG)
+        {
+            neg = true;
+            copy->children[0] = txc_node_copy_read(node->children[0]->children[0]);
+        }
+        if (copy->children_amount == 1)
+        {
+            txc_node_free(node);
+            if (txc_int_is_pos_one(copy->children[0]->impl.integer))
+            {
+                txc_node *const tmp = txc_node_copy_read(copy->children[0]);
+                txc_node_free(copy);
+                copy = tmp;
+            }
+            if (neg)
+            {
+                txc_node *const tmp = txc_node_create_un_op(TXC_NEG, copy);
+                txc_node_free(copy);
+                copy = tmp;
+            }
+            return bake(copy);
+        }
+        if (copy->children[1]->type == TXC_INT && txc_int_is_neg(copy->children[1]->impl.integer))
+        {
+            neg = !neg;
+            copy->children[1] = txc_node_simplify(txc_node_create_un_op(TXC_NEG, copy->children[1]));
+        }
+        else if (copy->children[1]->type == TXC_NEG)
+        {
+            neg = !neg;
+            copy->children[0] = txc_node_copy_read(node->children[0]->children[0]);
+        }
+        txc_node_free(node);
+        if (copy->children[0]->type == TXC_INT && txc_int_is_pos_one(copy->children[0]->impl.integer))
+        {
+            txc_node *tmp = txc_node_copy_read(copy->children[1]);
+            txc_node_free(copy);
+            if (neg)
+            {
+                txc_node *const tmptmp = txc_node_create_un_op(TXC_NEG, txc_node_copy_read(tmp));
+                txc_node_free(tmp);
+                tmp = tmptmp;
+            }
+            return bake(txc_node_simplify(tmp));
+        }
+        // TODO switch if frac
+        if (copy->children[0]->type == TXC_NAN)
+        {
+            txc_node *tmp = txc_node_copy_read(copy->children[0]);
+            txc_node_free(copy);
+            return tmp;
+        }
+        if (copy->children[1]->type == TXC_NAN)
+        {
+            txc_node *tmp = txc_node_copy_read(copy->children[1]);
+            txc_node_free(copy);
+            return tmp;
+        }
+        txc_int *num = NULL;
+        txc_int *den = NULL;
+        if (copy->children[0]->type == TXC_INT)
+        {
+            den = txc_int_copy_write(copy->children[0]->impl.integer);
+        }
+        else if (copy->children[0]->type == TXC_MUL && copy->children[0]->children[copy->children[0]->children_amount - 1]->type == TXC_INT)
+        {
+            den = txc_int_copy_write(copy->children[0]->children[copy->children[0]->children_amount - 1]->impl.integer);
+            txc_node *tmp = txc_node_copy_write(copy->children[0]);
+            if (tmp == NULL)
+            {
+                txc_int_free(den);
+                den = NULL;
+            }
+            else
+            {
+                copy->children[0] = tmp;
+            }
+        }
+        else
+        {
+            return copy;
+        }
+        if (den == NULL)
+        {
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        if (copy->children[1]->type == TXC_INT)
+        {
+            num = txc_int_copy_write(copy->children[1]->impl.integer);
+        }
+        else if (copy->children[1]->type == TXC_MUL && copy->children[1]->children[copy->children[1]->children_amount - 1]->type == TXC_INT)
+        {
+            num = txc_int_copy_write(copy->children[1]->children[copy->children[1]->children_amount - 1]->impl.integer);
+            txc_node *tmp = txc_node_copy_write(copy->children[1]);
+            if (tmp == NULL)
+            {
+                txc_int_free(num);
+                num = NULL;
+            }
+            else
+            {
+                copy->children[0] = tmp;
+            }
+        }
+        else
+        {
+            txc_int_free(den);
+            return copy;
+        }
+        if (num == NULL)
+        {
+            txc_int_free(den);
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        txc_int *gcd_den = txc_int_copy_write(den);
+        if (gcd_den == NULL)
+        {
+            txc_int_free(den);
+            txc_int_free(num);
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        txc_int *gcd_num = txc_int_copy_write(num);
+        if (gcd_num == NULL)
+        {
+            txc_int_free(gcd_den);
+            txc_int_free(den);
+            txc_int_free(num);
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        txc_int *const gcd = txc_int_gcd(gcd_num, gcd_den);
+        if (gcd == NULL)
+        {
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        txc_int *new_den = txc_int_div_mod(den, gcd)->a;
+        txc_int_free(den);
+        if (new_den == NULL)
+        {
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        txc_int *new_num = txc_int_div_mod(num, gcd)->a;
+        txc_int_free(num);
+        txc_int_free(gcd_den);
+        txc_int_free(gcd_num);
+        if (new_num == NULL)
+        {
+            txc_int_free(new_den);
+            txc_node_free(copy);
+            return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        txc_node *den_node = txc_int_to_node(new_den);
+        if (den_node->type == TXC_NAN)
+        {
+            txc_int_free(new_den);
+            txc_int_free(new_num);
+            txc_node_free(copy);
+            return den_node;
+        }
+        txc_node *num_node = txc_int_to_node(new_num);
+        if (num_node->type == TXC_NAN)
+        {
+            txc_node_free(den_node);
+            txc_int_free(new_den);
+            txc_int_free(new_num);
+            txc_node_free(copy);
+            return num_node;
+        }
+        den_node = bake(den_node);
+        num_node = bake(num_node);
+        if (copy->children[0]->type == TXC_INT)
+        {
+            txc_node_free(copy->children[0]);
+            copy->children[0] = den_node;
+        }
+        else
+        {
+            txc_node_free(copy->children[0]->children[copy->children[0]->children_amount - 1]);
+            copy->children[0]->children[copy->children[0]->children_amount - 1] = den_node;
+            copy->children[0] = bake(txc_node_simplify(copy->children[0]));
+        }
+        if (copy->children[1]->type == TXC_INT)
+        {
+            txc_node_free(copy->children[1]);
+            copy->children[1] = num_node;
+        }
+        else
+        {
+            txc_node_free(copy->children[1]->children[copy->children[1]->children_amount - 1]);
+            copy->children[1]->children[copy->children[1]->children_amount - 1] = num_node;
+            copy->children[1] = bake(txc_node_simplify(copy->children[1]));
+        }
+        if (copy->children[0]->type == TXC_INT && txc_int_is_pos_one(copy->children[0]->impl.integer))
+        {
+            txc_node *tmp = txc_node_copy_read(copy->children[1]);
+            txc_node_free(copy);
+            if (!neg)
+                return tmp;
+            txc_node *tmptmp = txc_node_create_un_op(TXC_NEG, tmp);
+            if (tmptmp == NULL)
+            {
+                txc_node_free(tmp);
+                return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+            }
+            return txc_node_simplify(tmptmp);
+        }
+        if (copy->children[1]->type == TXC_INT && txc_int_is_pos_one(copy->children[1]->impl.integer))
+        {
+            struct txc_node **tmp = realloc(copy->children, sizeof *copy->children * 1);
+            if (tmp != NULL)
+            {
+                txc_node_free(copy->children[1]);
+                copy->children = tmp;
+                copy->children_amount = 1;
+            }
+        }
+        if (neg)
+        {
+            txc_node *tmp = txc_node_create_un_op(TXC_NEG, copy);
+            if (tmp == NULL)
+            {
+                txc_node_free(copy);
+                return (txc_node *)&TXC_NAN_ERROR_ALLOC;
+            }
+            return txc_node_simplify(tmp);
+        }
+        return bake(copy);
     }
     case TXC_NAN: /* FALLTHROUGH */
     case TXC_INT: /* FALLTHROUGH */

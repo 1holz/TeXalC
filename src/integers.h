@@ -29,6 +29,12 @@
 
 typedef struct txc_int txc_int;
 
+struct txc_txc_int_tuple
+{
+    txc_int *a;
+    txc_int *b;
+};
+
 /* MEMORY */
 
 extern txc_node *txc_int_create_int(const char *const str, size_t len, uint_fast8_t base);
@@ -67,7 +73,9 @@ extern txc_int *txc_int_add(const txc_int *const *const summands, const size_t l
 
 extern txc_int *txc_int_mul(const txc_int *const *const factors, const size_t len);
 
-extern txc_int *txc_int_mul(txc_int *const *const factors, const size_t len);
+extern txc_int *txc_int_gcd(txc_int *a, txc_int *b);
+
+extern struct txc_txc_int_tuple *txc_int_div_mod(const txc_int *const dividend, const txc_int *const divisor);
 
 /* PRINT */
 
