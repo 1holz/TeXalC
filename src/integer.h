@@ -13,11 +13,10 @@
  *
  *     You should have received a copy of the GNU Affero General Public License
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
  */
 
-#ifndef TXC_INTEGERS
-#define TXC_INTEGERS
+#ifndef TXC_INTEGER
+#define TXC_INTEGER
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -53,7 +52,7 @@ extern void txc_int_free(txc_int *const integer);
 
 extern txc_node *txc_int_to_node(txc_int *const integer);
 
-/* INT */
+/* INTEGER */
 
 bool txc_int_is_pos_one(const txc_int *test);
 
@@ -81,4 +80,4 @@ extern struct txc_txc_int_tuple *txc_int_div_mod(const txc_int *const dividend, 
 
 extern const char *txc_int_to_str(txc_int *const integer);
 
-#endif /* TXC_INTEGERS */
+#endif /* TXC_INTEGER */

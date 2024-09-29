@@ -13,7 +13,6 @@
  *
  *     You should have received a copy of the GNU Affero General Public License
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
  */
 
 #include <assert.h>
@@ -23,7 +22,7 @@
 #include <stdio.h>
 
 #include "node.h"
-#include "integers.h"
+#include "integer.h"
 #include "util.h"
 
 #define TXC_ERROR_ALLOC "Could not allocate %zu bytes of memory for %s in %s line %d.\n"
