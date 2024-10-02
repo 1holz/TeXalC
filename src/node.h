@@ -18,6 +18,8 @@
 #ifndef TXC_NODE
 #define TXC_NODE
 
+#include <stdbool.h>
+
 /* DEFINITIONS */
 
 enum txc_node_type
@@ -54,7 +56,7 @@ extern void txc_node_assert_valid(const txc_node *const node, const bool recursi
 
 extern const struct txc_int *txc_node_to_int(const txc_node *const node);
 
-extern const txc_node *txc_node_create(txc_node *const *const children, union impl impl, const size_t children_amount, const enum txc_node_type type);
+extern const txc_node *txc_node_create(const txc_node *const *const children, const union impl impl, const size_t children_amount, const enum txc_node_type type);
 
 extern const txc_node *txc_node_create_nan(const char *const reason);
 

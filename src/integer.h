@@ -41,7 +41,7 @@ extern void txc_int_assert_valid(const txc_int *const integer);
 
 /* MEMORY */
 
-extern const txc_node *txc_int_to_node(txc_int *const integer);
+extern const txc_node *txc_int_to_node(const txc_int *const integer);
 
 extern const txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base);
 

@@ -65,7 +65,7 @@ static const struct txc_int *bake(const struct txc_int *const integer)
     return integer;
 }
 
-const txc_node *txc_int_to_node(struct txc_int *const integer)
+const txc_node *txc_int_to_node(const struct txc_int *const integer)
 {
     if (integer == NULL)
         return &TXC_NAN_ERROR_ALLOC;
@@ -265,7 +265,7 @@ const struct txc_node *txc_int_create_int_node(const char *const str, size_t len
     for (; cur[0] == '0'; len--) // potencial buffer overflow when only 0 though this should be caught by lexer already
         cur++;
     if (len <= 0)
-        return txc_int_to_node((struct txc_int *)txc_int_create_zero());
+        return txc_int_to_node(txc_int_create_zero());
     size_t chars_per_elem = TXC_INT_ARRAY_TYPE_WIDTH / width;
     txc_int *integer = init(len / chars_per_elem + 1);
     if (integer == NULL)
@@ -283,7 +283,7 @@ const struct txc_node *txc_int_create_int_node(const char *const str, size_t len
         integer = from_hex_str(integer, cur, len);
         break;
     }
-    return txc_int_to_node(fit(integer));
+    return txc_int_to_node(bake(fit(integer)));
 }
 
 const struct txc_int *txc_int_create_zero(void)
