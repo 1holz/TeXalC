@@ -23,11 +23,8 @@
 enum txc_node_type
 {
     TXC_NAN,
-
     TXC_INT,
-
     TXC_NEG,
-
     TXC_ADD,
     TXC_MUL,
     TXC_FRAC
@@ -49,38 +46,40 @@ extern const txc_node TXC_NAN_ERROR_NYI;
 extern const txc_node TXC_NAN_UNSPECIFIED;
 extern const txc_node TXC_NAN_ZERO_DIVISION;
 
+/* ASSERTS */
+
+extern void txc_node_assert_valid(const txc_node *const node, const bool recursive);
+
 /* MEMORY */
 
-extern txc_node *txc_node_create(txc_node **children, union impl impl, size_t children_amount, enum txc_node_type type);
+extern const struct txc_int *txc_node_to_int(const txc_node *const node);
 
-extern txc_node *txc_node_create_nan(const char *const reason);
+extern const txc_node *txc_node_create(txc_node *const *const children, union impl impl, const size_t children_amount, const enum txc_node_type type);
 
-extern txc_node *txc_node_create_un_op(const enum txc_node_type type, txc_node *const operand);
+extern const txc_node *txc_node_create_nan(const char *const reason);
 
-extern txc_node *txc_node_create_bin_op(const enum txc_node_type type, txc_node *const operand_1, txc_node *const operand_2);
+extern const txc_node *txc_node_create_un_op(const enum txc_node_type type, const txc_node *const operand);
 
-extern txc_node *txc_node_copy_read(const txc_node *const from);
+extern const txc_node *txc_node_create_bin_op(const enum txc_node_type type, const txc_node *const operand_1, const txc_node *const operand_2);
+
+extern const txc_node *txc_node_copy_read(const txc_node *const from);
 
 extern txc_node *txc_node_copy_write(const txc_node *const from);
 
-extern void txc_node_free(txc_node *const node);
-
-/* CONVERT */
-
-extern struct txc_int *txc_node_to_int(txc_node *const node);
+extern void txc_node_free(const txc_node *const node);
 
 /* NODE */
 
-extern txc_node *txc_node_simplify(txc_node *const node);
+extern const txc_node *txc_node_simplify(const txc_node *const node);
 
 /* PRINT */
 
 extern char *txc_node_to_str(const txc_node *const node);
 
-extern void txc_node_print(txc_node *const node);
+extern void txc_node_print(const txc_node *const node);
 
-extern void txc_node_print_if_debug(txc_node *const node);
+extern void txc_node_print_if_debug(const txc_node *const node);
 
-extern void txc_node_simplify_and_print(txc_node *const node);
+extern void txc_node_simplify_and_print(const txc_node *const node);
 
 #endif /* TXC_NODE */

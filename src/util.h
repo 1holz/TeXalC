@@ -18,6 +18,11 @@
 #ifndef TXC_UTIL
 #define TXC_UTIL
 
+#define TXC_ERROR_ALLOC(bytes, purpose) fprintf(stderr, "Could not allocate %zu bytes of memory for %s at %s:%d.\n", bytes, purpose, __FILE__, __LINE__)
+#define TXC_ERROR_INVALID_NODE_TYPE(type) fprintf(stderr, "Node type %u is invalid at %s:%d.\n", type, __FILE__, __LINE__)
+#define TXC_ERROR_NYI() fprintf(stderr, "Not yet implemented at %s:%d.\n", __FILE__, __LINE__)
+#define TXC_ERROR_OVERFLOW(cause) fprintf(stderr, "Overflow was caught for %s in %s line %d.\n", cause, __FILE__, __LINE__)
+
 struct txc_size_t_tuple
 {
     size_t a;

@@ -72,9 +72,9 @@ expr:
 ;
 
 int:
-  BIN_INT   { $$ = txc_int_create_int($1.str, $1.len, 2); }
-| DEC_INT   { $$ = txc_int_create_int($1.str, $1.len, 10); }
-| HEX_INT   { $$ = txc_int_create_int($1.str, $1.len, 16); }
+  BIN_INT   { $$ = txc_int_create_int_node($1.str, $1.len, 2); }
+| DEC_INT   { $$ = txc_int_create_int_node($1.str, $1.len, 10); }
+| HEX_INT   { $$ = txc_int_create_int_node($1.str, $1.len, 16); }
 | MINUS int { $$ = txc_node_create_un_op(TXC_NEG, $2); }
 | PLUS int  { $$ = $2; }
 ;
