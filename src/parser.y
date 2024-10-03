@@ -59,7 +59,7 @@ input:
 
 line:
   END
-| expr END     { txc_node_simplify_and_print($1); }
+| expr END { txc_node_simplify_and_print($1); }
 ;
 
 expr:

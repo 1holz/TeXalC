@@ -45,13 +45,11 @@ extern const txc_node *txc_int_to_node(const txc_int *const integer);
 
 extern const txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base);
 
-extern const txc_int *txc_int_create_zero(void);
+extern txc_int *txc_int_create_zero(void);
 
-extern const txc_int *txc_int_create_one(void);
+extern txc_int *txc_int_create_one(void);
 
-extern const txc_int *txc_int_copy_read(const txc_int *const from);
-
-extern txc_int *txc_int_copy_write(const txc_int *const from);
+extern txc_int *txc_int_copy(const txc_int *const from);
 
 extern void txc_int_free(const txc_int *const integer);
 

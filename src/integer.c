@@ -57,21 +57,13 @@ void txc_int_assert_valid(const struct txc_int *const integer)
 
 /* MEMORY */
 
-static const struct txc_int *bake(const struct txc_int *const integer)
-{
-    if (integer == NULL)
-        return NULL;
-    txc_int_assert_valid(integer);
-    return integer;
-}
-
 const txc_node *txc_int_to_node(const struct txc_int *const integer)
 {
     if (integer == NULL)
         return &TXC_NAN_ERROR_ALLOC;
     txc_int_assert_valid(integer);
     union impl impl;
-    impl.integer = (struct txc_int *)bake(integer);
+    impl.integer = (struct txc_int *)integer;
     return txc_node_create(NULL, impl, 0, TXC_INT);
 }
 
@@ -137,7 +129,6 @@ static struct txc_int *inc(struct txc_int *const integer)
 
 static struct txc_int *fit(struct txc_int *const integer)
 {
-    // TODO merge with bake?
     if (integer == NULL)
         return NULL;
     while (integer->used > 0 && integer->data[integer->used - 1] == 0)
@@ -283,37 +274,28 @@ const struct txc_node *txc_int_create_int_node(const char *const str, size_t len
         integer = from_hex_str(integer, cur, len);
         break;
     }
-    return txc_int_to_node(bake(fit(integer)));
+    return txc_int_to_node(fit(integer));
 }
 
-const struct txc_int *txc_int_create_zero(void)
+struct txc_int *txc_int_create_zero(void)
 {
     struct txc_int *zero = init(0);
     if (zero == NULL)
         return NULL;
-    return bake(zero);
+    return zero;
 }
 
-const struct txc_int *txc_int_create_one(void)
+struct txc_int *txc_int_create_one(void)
 {
     struct txc_int *one = init(1);
     if (one == NULL)
         return NULL;
     one->used = 1;
     one->data[0] = 1;
-    return bake(one);
+    return one;
 }
 
-const struct txc_int *txc_int_copy_read(const struct txc_int *const from)
-{
-    // TODO copy only ref
-    if (from == NULL)
-        return NULL;
-    txc_int_assert_valid(from);
-    return txc_int_copy_write(from);
-}
-
-struct txc_int *txc_int_copy_write(const struct txc_int *const from)
+struct txc_int *txc_int_copy(const struct txc_int *const from)
 {
     if (from == NULL)
         return NULL;
@@ -536,16 +518,13 @@ static struct txc_int *add_acc(struct txc_int *acc, const struct txc_int *const 
         if (abs_cmp == 0)
         {
             txc_int_free(acc);
-            const struct txc_int *tmp1 = txc_int_create_zero();
-            struct txc_int *tmp2 = txc_int_copy_write(tmp1);
-            txc_int_free(tmp1);
-            return tmp2;
+            return txc_int_create_zero();
         }
         struct txc_int *smaller = acc;
         if (abs_cmp < 0)
-            acc = txc_int_copy_write(summand);
+            acc = txc_int_copy(summand);
         else
-            smaller = txc_int_copy_write(summand);
+            smaller = txc_int_copy(summand);
         if (acc == NULL || smaller == NULL)
         {
             txc_int_free(acc);
@@ -616,12 +595,7 @@ static struct txc_int *add_acc(struct txc_int *acc, const struct txc_int *const 
 struct txc_int *txc_int_add(const struct txc_int *const *const summands, const size_t len)
 {
     if (len <= 0)
-    {
-        const struct txc_int *tmp1 = txc_int_create_zero();
-        struct txc_int *tmp2 = txc_int_copy_write(tmp1);
-        txc_int_free(tmp1);
-        return tmp2;
-    }
+        return txc_int_create_zero();
     if (summands == NULL)
         return NULL;
     assert(summands != NULL);
@@ -631,7 +605,7 @@ struct txc_int *txc_int_add(const struct txc_int *const *const summands, const s
             return NULL;
         txc_int_assert_valid(summands[i]);
     }
-    struct txc_int *acc = txc_int_copy_write(txc_int_create_zero());
+    struct txc_int *acc = txc_int_create_zero();
     for (size_t i = 0; i < len; i++)
     {
         if (summands[i]->used > 0)
@@ -643,12 +617,7 @@ struct txc_int *txc_int_add(const struct txc_int *const *const summands, const s
 struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const size_t len)
 {
     if (len <= 0)
-    {
-        const struct txc_int *tmp1 = txc_int_create_zero();
-        struct txc_int *tmp2 = txc_int_copy_write(tmp1);
-        txc_int_free(tmp1);
-        return tmp2;
-    }
+        return txc_int_create_zero();
     if (factors == NULL)
         return NULL;
     for (size_t i = 0; i < len; i++)
@@ -659,15 +628,11 @@ struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const si
     }
     for (size_t i = 0; i < len; i++)
     {
-        if (factors[i]->used != 0)
-            continue;
-        const struct txc_int *tmp1 = txc_int_create_zero();
-        struct txc_int *tmp2 = txc_int_copy_write(tmp1);
-        txc_int_free(tmp1);
-        return tmp2;
+        if (factors[i]->used == 0)
+            return txc_int_create_zero();
     }
     bool neg = factors[0]->neg;
-    struct txc_int *acc = txc_int_copy_write(factors[0]);
+    struct txc_int *acc = txc_int_copy(factors[0]);
     if (acc == NULL)
         return NULL;
     for (size_t i = 1; i < len; i++)
@@ -691,7 +656,7 @@ struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const si
             {
                 if (((factors[i]->data[j] >> k) & 1) == 0)
                     continue;
-                summands[summand_i] = shift_bigger_wide_amount(txc_int_copy_write(acc), j, k);
+                summands[summand_i] = shift_bigger_wide_amount(txc_int_copy(acc), j, k);
                 summand_i++;
             }
         }
@@ -703,7 +668,7 @@ struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const si
     if (acc == NULL)
         return NULL;
     acc->neg = neg;
-    return fit(acc); // TODO bake?
+    return fit(acc);
 }
 
 static struct txc_size_t_tuple int_ffs(const struct txc_int *const integer)
@@ -738,13 +703,13 @@ const struct txc_int *txc_int_gcd(const struct txc_int *const aa, const struct t
     txc_int_assert_valid(aa);
     txc_int_assert_valid(bb);
     if (txc_int_is_zero(aa))
-        return txc_int_copy_read(bb);
+        return txc_int_copy(bb);
     if (txc_int_is_zero(bb))
-        return txc_int_copy_read(aa);
+        return txc_int_copy(aa);
     const size_t large_used = bb->used > aa->used ? bb->used : aa->used;
-    struct txc_int *const large = txc_int_copy_write(bb->used > aa->used ? bb : aa);
-    struct txc_int *a = inc_size(txc_int_copy_write(aa), large_used);
-    struct txc_int *b = inc_size(txc_int_copy_write(bb), large_used);
+    struct txc_int *const large = txc_int_copy(bb->used > aa->used ? bb : aa);
+    struct txc_int *a = inc_size(txc_int_copy(aa), large_used);
+    struct txc_int *b = inc_size(txc_int_copy(bb), large_used);
     if (large == NULL || a == NULL || b == NULL)
     {
         txc_int_free(large);
@@ -777,7 +742,7 @@ const struct txc_int *txc_int_gcd(const struct txc_int *const aa, const struct t
     } while (!txc_int_is_zero(b));
     a = shift_bigger_wide_amount(a, c.a, c.b);
     txc_int_free(b);
-    return bake(fit(a));
+    return fit(a);
 }
 
 // FIXME calculates remainder instead of mod
@@ -788,8 +753,8 @@ struct txc_txc_int_tuple *txc_int_div_mod(const struct txc_int *const dividend, 
     txc_int_assert_valid(dividend);
     txc_int_assert_valid(divisor);
     assert(!txc_int_is_zero(divisor));
-    struct txc_int *const div = txc_int_copy_write(txc_int_create_zero());
-    struct txc_int *const mod = txc_int_copy_write(dividend);
+    struct txc_int *const div = txc_int_create_zero();
+    struct txc_int *const mod = txc_int_copy(dividend);
     const struct txc_int *const one = txc_int_create_one();
     struct txc_txc_int_tuple *const result = malloc(sizeof *result);
     if (div == NULL || mod == NULL || one == NULL)
@@ -842,7 +807,7 @@ const struct txc_int *txc_int_div(const struct txc_int *const dividend, const st
         return NULL;
     struct txc_int *const tmp2 = tmp1->a;
     free(tmp1);
-    return bake(tmp2);
+    return tmp2;
 }
 
 const struct txc_int *txc_int_mod(const struct txc_int *const dividend, const struct txc_int *const divisor)
@@ -852,7 +817,7 @@ const struct txc_int *txc_int_mod(const struct txc_int *const dividend, const st
         return NULL;
     struct txc_int *const tmp2 = tmp1->b;
     free(tmp1);
-    return bake(tmp2);
+    return tmp2;
 }
 
 /* PRINT */

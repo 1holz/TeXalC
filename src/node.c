@@ -260,7 +260,7 @@ static struct txc_node *copy(const struct txc_node *const from, const bool write
         }
         break;
     case TXC_INT:
-        copy->impl.integer = write ? txc_int_copy_write(from->impl.integer) : (txc_int *)txc_int_copy_read(from->impl.integer);
+        copy->impl.integer = write ? txc_int_copy(from->impl.integer) : (txc_int *)txc_int_copy(from->impl.integer);
         if (copy->impl.integer == NULL)
         {
             free(copy);
@@ -346,7 +346,7 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
         {
         case TXC_INT:
         {
-            txc_int *const tmp = txc_int_copy_write(node->children[0]->impl.integer);
+            txc_int *const tmp = txc_int_copy(node->children[0]->impl.integer);
             txc_node_free(copy);
             if (tmp == NULL)
                 return &TXC_NAN_ERROR_ALLOC;
@@ -486,7 +486,7 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
             if (copy->children[0]->type == TXC_NEG)
                 tmp = txc_node_copy_read(copy->children[0]->children[0]);
             else
-                tmp = txc_int_to_node(txc_int_neg(txc_int_copy_write(copy->children[0]->impl.integer)));
+                tmp = txc_int_to_node(txc_int_neg(txc_int_copy(copy->children[0]->impl.integer)));
             txc_node_free(copy->children[0]);
             copy->children[0] = txc_node_copy_write(tmp);
             txc_node_free(tmp);
@@ -518,7 +518,7 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
             if (copy->children[1]->type == TXC_NEG)
                 tmp = txc_node_copy_read(copy->children[1]->children[0]);
             else
-                tmp = txc_int_to_node(txc_int_neg(txc_int_copy_write(copy->children[1]->impl.integer)));
+                tmp = txc_int_to_node(txc_int_neg(txc_int_copy(copy->children[1]->impl.integer)));
             txc_node_free(copy->children[1]);
             copy->children[1] = txc_node_copy_write(tmp);
             txc_node_free(tmp);
@@ -546,13 +546,13 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
         const txc_int *den = NULL;
         // TODO free here already?
         if (copy->children[0]->type == TXC_INT)
-            den = txc_int_copy_read(copy->children[0]->impl.integer);
+            den = txc_int_copy(copy->children[0]->impl.integer);
         else if (copy->children[0]->type == TXC_MUL && copy->children[0]->children[copy->children[0]->children_amount - 1]->type == TXC_INT)
-            den = txc_int_copy_read(copy->children[0]->children[copy->children[0]->children_amount - 1]->impl.integer);
+            den = txc_int_copy(copy->children[0]->children[copy->children[0]->children_amount - 1]->impl.integer);
         if (copy->children[1]->type == TXC_INT)
-            num = txc_int_copy_read(copy->children[1]->impl.integer);
+            num = txc_int_copy(copy->children[1]->impl.integer);
         else if (copy->children[1]->type == TXC_MUL && copy->children[1]->children[copy->children[1]->children_amount - 1]->type == TXC_INT)
-            num = txc_int_copy_read(copy->children[1]->children[copy->children[1]->children_amount - 1]->impl.integer);
+            num = txc_int_copy(copy->children[1]->children[copy->children[1]->children_amount - 1]->impl.integer);
         if (num == NULL || den == NULL)
         {
             txc_int_free(num);
