@@ -1,7 +1,6 @@
 - garbage collection
 - tests + ci
-- move closer to linux kernel style guide
 - zero one ints (maybe not?)
 - juxtaposition (seems difficult without using non POSIX stuff)
 - variables
-- make makefile POSIX compliant (https://nullprogram.com/blog/2017/08/20/)
+- make makefile POSIX compliant (https://nullprogram.com/blog/2017/08/20/) (seems difficult without using non POSIX stuff)

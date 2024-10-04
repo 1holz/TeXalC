@@ -41,8 +41,7 @@ char *txc_strrev(char *const str)
     assert(str != NULL);
     char *start = str;
     char *end = start + strlen(start) - 1;
-    while (start < end)
-    {
+    while (start < end) {
         *start ^= *end;
         *end ^= *start;
         *start ^= *end;

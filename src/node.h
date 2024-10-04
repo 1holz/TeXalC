@@ -22,8 +22,7 @@
 
 /* DEFINITIONS */
 
-enum txc_node_type
-{
+enum txc_node_type {
     TXC_NAN,
     TXC_INT,
     TXC_NEG,
@@ -32,8 +31,7 @@ enum txc_node_type
     TXC_FRAC
 };
 
-union impl
-{
+union impl {
     char *reason;
     struct txc_int *integer;
 };

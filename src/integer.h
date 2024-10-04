@@ -29,8 +29,7 @@
 typedef struct txc_int txc_int;
 
 // TODO const?
-struct txc_txc_int_tuple
-{
+struct txc_txc_int_tuple {
     txc_int *a;
     txc_int *b;
 };
