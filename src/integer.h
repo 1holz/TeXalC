@@ -28,15 +28,11 @@
 
 typedef struct txc_int txc_int;
 
-// TODO const?
-struct txc_txc_int_tuple {
-    txc_int *a;
-    txc_int *b;
-};
-
-/* ASSERTS */
+/* VALID */
 
 extern void txc_int_assert_valid(const txc_int *const integer);
+
+extern bool txc_int_test_valid(const txc_int *const integer);
 
 /* MEMORY */
 
@@ -73,8 +69,6 @@ extern txc_int *txc_int_add(const txc_int *const *const summands, const size_t l
 extern txc_int *txc_int_mul(const txc_int *const *const factors, const size_t len);
 
 extern const txc_int *txc_int_gcd(const txc_int *const aa, const txc_int *const bb);
-
-extern struct txc_txc_int_tuple *txc_int_div_mod(const txc_int *const dividend, const txc_int *const divisor);
 
 extern const struct txc_int *txc_int_div(const struct txc_int *const dividend, const struct txc_int *const divisor);
 

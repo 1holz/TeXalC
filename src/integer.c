@@ -42,7 +42,12 @@ struct txc_int {
     bool neg;
 };
 
-/* ASSERTS */
+struct txc_txc_int_tuple {
+    txc_int *a;
+    txc_int *b;
+};
+
+/* VALID */
 
 void txc_int_assert_valid(const struct txc_int *const integer)
 {
@@ -52,6 +57,17 @@ void txc_int_assert_valid(const struct txc_int *const integer)
         assert(integer->data != NULL);
     if (integer->used > 0)
         assert(integer->data[integer->used - 1] > 0);
+}
+
+bool txc_int_test_valid(const struct txc_int *const integer)
+{
+    if (integer == NULL || integer->used > integer->size)
+        return false;
+    if (integer->size > 0 && integer->data == NULL)
+        return false;
+    if (integer->used > 0 && integer->data[integer->used - 1] <= 0)
+        return false;
+    return true;
 }
 
 /* MEMORY */
@@ -696,7 +712,7 @@ const struct txc_int *txc_int_gcd(const struct txc_int *const aa, const struct t
 }
 
 // FIXME calculates remainder instead of mod
-struct txc_txc_int_tuple *txc_int_div_mod(const struct txc_int *const dividend, const struct txc_int *const divisor)
+static struct txc_txc_int_tuple *div_mod(const struct txc_int *const dividend, const struct txc_int *const divisor)
 {
     if (dividend == NULL || divisor == NULL)
         return NULL;
@@ -748,20 +764,20 @@ struct txc_txc_int_tuple *txc_int_div_mod(const struct txc_int *const dividend, 
 
 const struct txc_int *txc_int_div(const struct txc_int *const dividend, const struct txc_int *const divisor)
 {
-    struct txc_txc_int_tuple *const tmp1 = txc_int_div_mod(dividend, divisor);
+    struct txc_txc_int_tuple *const tmp1 = div_mod(dividend, divisor);
     if (tmp1 == NULL)
         return NULL;
-    struct txc_int *const tmp2 = tmp1->a;
+    const struct txc_int *const tmp2 = tmp1->a;
     free(tmp1);
     return tmp2;
 }
 
 const struct txc_int *txc_int_mod(const struct txc_int *const dividend, const struct txc_int *const divisor)
 {
-    struct txc_txc_int_tuple *const tmp1 = txc_int_div_mod(dividend, divisor);
+    struct txc_txc_int_tuple *const tmp1 = div_mod(dividend, divisor);
     if (tmp1 == NULL)
         return NULL;
-    struct txc_int *const tmp2 = tmp1->b;
+    const struct txc_int *const tmp2 = tmp1->b;
     free(tmp1);
     return tmp2;
 }

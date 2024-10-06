@@ -46,9 +46,11 @@ extern const txc_node TXC_NAN_ERROR_NYI;
 extern const txc_node TXC_NAN_UNSPECIFIED;
 extern const txc_node TXC_NAN_ZERO_DIVISION;
 
-/* ASSERTS */
+/* VALID */
 
 extern void txc_node_assert_valid(const txc_node *const node, const bool recursive);
+
+extern bool txc_node_test_valid(const txc_node *const node, const bool recursive);
 
 /* MEMORY */
 

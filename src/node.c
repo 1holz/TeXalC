@@ -73,7 +73,7 @@ const struct txc_node TXC_NAN_ZERO_DIVISION = { .children = NULL,
                                                 .type = TXC_NAN,
                                                 .read_only = true };
 
-/* ASSERTS */
+/* VALID */
 
 void txc_node_assert_valid(const struct txc_node *const node, const bool recursive)
 {
@@ -94,8 +94,7 @@ void txc_node_assert_valid(const struct txc_node *const node, const bool recursi
     case TXC_MUL:
         break;
     default:
-        TXC_ERROR_INVALID_NODE_TYPE(node->type);
-        break;
+        assert(false);
     }
     if (node->children_amount <= 0)
         return;
@@ -104,6 +103,46 @@ void txc_node_assert_valid(const struct txc_node *const node, const bool recursi
         return;
     for (size_t i = 0; i < node->children_amount; i++)
         txc_node_assert_valid(node->children[i], recursive);
+}
+
+bool txc_node_test_valid(const struct txc_node *const node, const bool recursive)
+{
+    if (node == NULL)
+        return false;
+    switch (node->type) {
+    case TXC_INT:
+        if (node->children_amount != 0)
+            return false;
+        if (!txc_int_test_valid(node->impl.integer))
+            return false;
+        break;
+    case TXC_NEG:
+        if (node->children_amount != 1)
+            return false;
+        break;
+    case TXC_FRAC:
+        if (node->children_amount < 1 || node->children_amount > 2)
+            return false;
+        break;
+    case TXC_NAN: /* FALLTHROUGH */
+    case TXC_ADD: /* FALLTHROUGH */
+    case TXC_MUL:
+        break;
+    default:
+        return false;
+    }
+    if (node->children_amount <= 0)
+        return true;
+    if (node->children == NULL)
+        return false;
+    if (!recursive)
+        return true;
+    for (size_t i = 0; i < node->children_amount; i++) {
+        const bool child_valid = txc_node_test_valid(node->children[i], recursive);
+        if (!child_valid)
+            return false;
+    }
+    return true;
 }
 
 /* MEMORY */

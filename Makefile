@@ -15,74 +15,81 @@
 
 BUILD = build
 SRC = src
-OBJS = parser.o lexer.o util.o node.o integer.o texalc.o
+OBJS = parser.o lexer.o util.o node.o integer.o
 EXE = texalc
-DEBUG_EXE = $(EXE)-debug
 
-RELEASE_DIR = $(BUILD)/release
-DEBUG_DIR = $(BUILD)/debug
-
-CC = gcc
-CFLAGS = -Wall -Wextra -pedantic -I$(SRC) -Wno-alloc-size-larger-than
-
-RELEASE_CFLAGS = -Ofast -I$(RELEASE_DIR)
-DEBUG_CFLAGS = -std=c99 -DDEBUG -D_POSIX_VERSION=200112L -D_POSIX_C_SOURCE=200112L -g -O0 -I$(DEBUG_DIR)
-
+YACC = bison
 LEX = flex
-PAR = bison
+CC = gcc
+
+YACC_FLAGS = --header -Wall -Wdangling-alias -Wcounterexamples -fcaret -ffixit -Wno-empty-rule
+RELEASE_YACC_FLAGS =
+DEBUG_YACC_FLAGS = --debug --yacc# --report=all --graph
 
 LEX_FLAGS = --warn
-PAR_FLAGS = --header -Wall -Wdangling-alias -Wcounterexamples -fcaret -ffixit -Wno-empty-rule
 RELEASE_LEX_FLAGS =
 DEBUG_LEX_FLAGS = --debug --perf-report --perf-report --nodefault --posix# --lex-compat --verbose
-RELEASE_PAR_FLAGS =
-DEBUG_PAR_FLAGS = --debug --yacc# --report=all --graph
+
+CFLAGS = -Wall -Wextra -pedantic -I$(SRC) -I$(BUILD) -Wno-alloc-size-larger-than
+RELEASE_CFLAGS = -Ofast
+DEBUG_CFLAGS = -std=c99 -DDEBUG -D_POSIX_VERSION=200112L -D_POSIX_C_SOURCE=200112L -g -O0
 
 all: setup release
 
 .PHONY: setup
 setup:
-	mkdir -p $(RELEASE_DIR)
-	mkdir -p $(DEBUG_DIR)
+	mkdir -p $(BUILD)
+
+.PHONY: release-full
+release-full: clean setup release check
 
 .PHONY: release
+release: LEX_FLAGS += $(RELEASE_LEX_FLAGS)
+release: YACC_FLAGS += $(RELEASE_YACC_FLAGS)
+release: CFLAGS += $(RELEASE_CFLAGS)
 release: $(EXE)
 
-$(RELEASE_DIR)/parser.o: $(SRC)/parser.y
-	$(PAR) $(PAR_FLAGS) $(RELEASE_PAR_FLAGS) -o $(RELEASE_DIR)/parser.c $(SRC)/parser.y
-	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c $(RELEASE_DIR)/parser.c -o $(RELEASE_DIR)/parser.o
-
-$(RELEASE_DIR)/lexer.o: $(SRC)/lexer.l
-	$(LEX) $(LEX_FLAGS) $(RELEASE_LEX_FLAGS) -o $(RELEASE_DIR)/lexer.c $(SRC)/lexer.l
-	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c $(RELEASE_DIR)/lexer.c -o $(RELEASE_DIR)/lexer.o
-
-$(RELEASE_DIR)/%.o: $(SRC)/%.c
-	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) -c  $< -o $@
-
-$(EXE): $(addprefix $(RELEASE_DIR)/, $(OBJS))
-	$(CC) $(CFLAGS) $(RELEASE_CFLAGS) $^ -o $(EXE)
+.PHONY: debug-full
+debug-full: clean setup debug check
 
 .PHONY: debug
-debug: $(DEBUG_EXE)
+debug: LEX_FLAGS += $(DEBUG_LEX_FLAGS)
+debug: YACC_FLAGS += $(DEBUG_YACC_FLAGS)
+debug: CFLAGS += $(DEBUG_CFLAGS)
+debug: $(EXE)
 
-$(DEBUG_DIR)/parser.o: $(SRC)/parser.y
-	$(PAR) $(PAR_FLAGS) $(DEBUG_PAR_FLAGS) -o $(DEBUG_DIR)/parser.c $(SRC)/parser.y
-	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c $(DEBUG_DIR)/parser.c -o $(DEBUG_DIR)/parser.o
+.PHONY: test
+test: check
 
-$(DEBUG_DIR)/lexer.o: $(SRC)/lexer.l
-	$(LEX) $(LEX_FLAGS) $(DEBUG_LEX_FLAGS) -o $(DEBUG_DIR)/lexer.c $(SRC)/lexer.l
-	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c $(DEBUG_DIR)/lexer.c -o $(DEBUG_DIR)/lexer.o
+.PHONY: check
+check: $(EXE)-test
+	@./$(EXE)-test test_start; true
+	@./$(EXE)-test test_test; true
+	@./$(EXE)-test integer_one; true
+	@./$(EXE)-test integer_zero; true
+	@./$(EXE)-test integer_create_bin; true
+	@./$(EXE)-test integer_create_dec; true
+	@./$(EXE)-test integer_create_hex; true
+	@./$(EXE)-test test_finish; true
 
-$(DEBUG_DIR)/%.o: $(SRC)/%.c
-	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) -c  $< -o $@
+$(BUILD)/parser.o: $(SRC)/parser.y
+	$(YACC) $(YACC_FLAGS) -o $(BUILD)/parser.c $(SRC)/parser.y
+	$(CC) $(CFLAGS) -c $(BUILD)/parser.c -o $(BUILD)/parser.o
 
-$(DEBUG_EXE): $(addprefix $(DEBUG_DIR)/, $(OBJS))
-	$(CC) $(CFLAGS) $(DEBUG_CFLAGS) $^ -o $(DEBUG_EXE)
+$(BUILD)/lexer.o: $(SRC)/lexer.l
+	$(LEX) $(LEX_FLAGS) -o $(BUILD)/lexer.c $(SRC)/lexer.l
+	$(CC) $(CFLAGS) -c $(BUILD)/lexer.c -o $(BUILD)/lexer.o
+
+$(BUILD)/%.o: $(SRC)/%.c
+	$(CC) $(CFLAGS) -c  $< -o $@
+
+$(EXE): $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/texalc.o
+	$(CC) $(CFLAGS) $^ -o $(EXE)
+
+$(EXE)-test: $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/test.o
+	$(CC) $(CFLAGS) $^ -o $(EXE)-test
 
 .PHONY: clean
 clean:
-	rm -fr $(RELEASE_DIR)
-	rm -fr $(DEBUG_DIR)
 	rm -fr $(BUILD)
 	rm -fr $(EXE)
-	rm -fr $(DEBUG_EXE)
