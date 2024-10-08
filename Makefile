@@ -58,20 +58,6 @@ debug: YACC_FLAGS += $(DEBUG_YACC_FLAGS)
 debug: CFLAGS += $(DEBUG_CFLAGS)
 debug: $(EXE)
 
-.PHONY: test
-test: check
-
-.PHONY: check
-check: $(EXE)-test
-	@./$(EXE)-test test_start; true
-	@./$(EXE)-test test_test; true
-	@./$(EXE)-test integer_one; true
-	@./$(EXE)-test integer_zero; true
-	@./$(EXE)-test integer_create_bin; true
-	@./$(EXE)-test integer_create_dec; true
-	@./$(EXE)-test integer_create_hex; true
-	@./$(EXE)-test test_finish; true
-
 $(BUILD)/parser.o: $(SRC)/parser.y
 	$(YACC) $(YACC_FLAGS) -o $(BUILD)/parser.c $(SRC)/parser.y
 	$(CC) $(CFLAGS) -c $(BUILD)/parser.c -o $(BUILD)/parser.o
@@ -88,6 +74,75 @@ $(EXE): $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/texalc.o
 
 $(EXE)-test: $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/test.o
 	$(CC) $(CFLAGS) $^ -o $(EXE)-test
+
+.PHONY: test
+test: check
+
+.PHONY: check
+check: $(EXE)-test
+	@./$(EXE)-test test_start; true
+	@fails=0; \
+	passes=0; \
+	if ./$(EXE)-test test_test; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_one; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_zero; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_copy; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_create_bin; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_create_dec; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_create_hex; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_unsigned_add; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_signed_add; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_unsigned_mul; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_signed_mul; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	echo ========; \
+	echo PASS: $$passes; \
+	echo FAIL: $$fails; \
+	echo ========; \
+	exit $$fails
 
 .PHONY: clean
 clean:

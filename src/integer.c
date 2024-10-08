@@ -146,7 +146,7 @@ static struct txc_int *fit(struct txc_int *const integer)
     while (integer->used > 0 && integer->data[integer->used - 1] == 0)
         integer->used--;
     txc_int_assert_valid(integer);
-    if (integer->size == 0)
+    if (integer->size == integer->used)
         return integer;
     if (integer->used == 0) {
         free(integer->data);
@@ -367,10 +367,8 @@ static struct txc_int *shift_bigger(struct txc_int *integer)
         integer = inc(integer);
         if (integer == NULL)
             return NULL;
-        integer->used++;
-        integer->data[integer->used + 1] = 1;
     }
-    bool carry = 0;
+    bool carry = false;
     for (size_t i = 0; i < integer->used; i++) {
         bool new_carry = integer->data[i] > TXC_INT_ARRAY_TYPE_MAX / 2;
         integer->data[i] <<= 1;
@@ -404,7 +402,7 @@ static struct txc_int *shift_bigger_wide_amount(struct txc_int *integer, const s
     if (integer == NULL)
         return NULL;
     for (size_t i = 0; i < integer->used; i++)
-        integer->data[bytes + i] = integer->data[i];
+        integer->data[bytes + integer->used - i - 1] = integer->data[integer->used - i - 1];
     for (size_t i = 0; i < bytes; i++)
         integer->data[i] = 0;
     integer->used = integer->used + bytes;
@@ -520,9 +518,7 @@ static struct txc_int *add_acc(struct txc_int *acc, const struct txc_int *const 
             txc_int_free(acc);
             return NULL;
         }
-        for (size_t i = 0; i < acc->used; i++) {
-            if (smaller->used <= i && !carry)
-                break;
+        for (size_t i = 0; i < acc->used && (i < smaller->used || carry); i++) {
             if (carry) {
                 carry = acc->data[i] <= 0;
                 acc->data[i]--;
@@ -538,16 +534,14 @@ static struct txc_int *add_acc(struct txc_int *acc, const struct txc_int *const 
             acc->used--;
     } else {
         size_t result_size = summand->used > acc->used ? summand->used : acc->used;
-        acc = inc_size(acc, result_size);
+        acc = inc_size(acc, result_size + 1);
         if (acc == NULL)
             return NULL;
-        for (size_t i = 0; i < result_size; i++) {
+        for (size_t i = 0; i < result_size && (i < summand->used || carry); i++) {
             if (i >= acc->used) {
                 acc->data[acc->used] = 0;
                 acc->used++;
             }
-            if (summand->used <= i && !carry)
-                break;
             if (carry) {
                 carry = acc->data[i] >= TXC_INT_ARRAY_TYPE_MAX;
                 acc->data[i]++;
@@ -559,11 +553,6 @@ static struct txc_int *add_acc(struct txc_int *acc, const struct txc_int *const 
             }
         }
         if (carry) {
-            if (acc->used >= acc->size) {
-                acc = inc(acc);
-                if (acc == NULL)
-                    return NULL;
-            }
             acc->data[acc->used] = 1;
             acc->used++;
         }
@@ -603,7 +592,7 @@ struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const si
         txc_int_assert_valid(factors[i]);
     }
     for (size_t i = 0; i < len; i++) {
-        if (factors[i]->used == 0)
+        if (txc_int_is_zero(factors[i]))
             return txc_int_create_zero();
     }
     bool neg = factors[0]->neg;
@@ -634,7 +623,7 @@ struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const si
         }
         txc_int_free(acc);
         acc = txc_int_add((const struct txc_int **)summands, summand_i);
-        for (size_t j = 0; j < factors[i]->used; j++)
+        for (size_t j = 0; j < summand_i; j++)
             txc_int_free(summands[j]);
     }
     if (acc == NULL)
