@@ -70,9 +70,9 @@ extern txc_int *txc_int_mul(const txc_int *const *const factors, const size_t le
 
 extern const txc_int *txc_int_gcd(const txc_int *const aa, const txc_int *const bb);
 
-extern const struct txc_int *txc_int_div(const struct txc_int *const dividend, const struct txc_int *const divisor);
+extern const txc_int *txc_int_div(const txc_int *const dividend, const txc_int *const divisor);
 
-extern const struct txc_int *txc_int_mod(const struct txc_int *const dividend, const struct txc_int *const divisor);
+// extern const txc_int *txc_int_mod(const txc_int *const dividend, const txc_int *const divisor);
 
 /* PRINT */
 

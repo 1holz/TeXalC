@@ -138,6 +138,26 @@ check: $(EXE)-test
 	else \
 		((fails++)); \
 	fi; \
+	if ./$(EXE)-test integer_gcd; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_div_invalid; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_div; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
+	if ./$(EXE)-test integer_to_str; then \
+		((passes++)); \
+	else \
+		((fails++)); \
+	fi; \
 	echo ========; \
 	echo PASS: $$passes; \
 	echo FAIL: $$fails; \

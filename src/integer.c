@@ -583,7 +583,7 @@ struct txc_int *txc_int_add(const struct txc_int *const *const summands, const s
 struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const size_t len)
 {
     if (len <= 0)
-        return txc_int_create_zero();
+        return txc_int_create_one();
     if (factors == NULL)
         return NULL;
     for (size_t i = 0; i < len; i++) {
