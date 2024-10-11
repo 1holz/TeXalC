@@ -18,6 +18,8 @@
 #ifndef TXC_INTEGER
 #define TXC_INTEGER
 
+#include "common.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -29,8 +31,6 @@
 typedef struct txc_int txc_int;
 
 /* VALID */
-
-extern void txc_int_assert_valid(const txc_int *const integer);
 
 extern bool txc_int_test_valid(const txc_int *const integer);
 

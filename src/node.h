@@ -18,6 +18,8 @@
 #ifndef TXC_NODE
 #define TXC_NODE
 
+#include "common.h"
+
 #include <stdbool.h>
 
 /* DEFINITIONS */
@@ -47,8 +49,6 @@ extern const txc_node TXC_NAN_UNSPECIFIED;
 extern const txc_node TXC_NAN_ZERO_DIVISION;
 
 /* VALID */
-
-extern void txc_node_assert_valid(const txc_node *const node, const bool recursive);
 
 extern bool txc_node_test_valid(const txc_node *const node, const bool recursive);
 

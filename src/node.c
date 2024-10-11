@@ -75,94 +75,69 @@ const struct txc_node TXC_NAN_ZERO_DIVISION = { .children = NULL,
 
 /* VALID */
 
-void txc_node_assert_valid(const struct txc_node *const node, const bool recursive)
-{
-    assert(node != NULL);
-    switch (node->type) {
-    case TXC_INT:
-        assert(node->children_amount == 0);
-        txc_int_assert_valid(node->impl.integer);
-        break;
-    case TXC_NEG:
-        assert(node->children_amount == 1);
-        break;
-    case TXC_FRAC:
-        assert(node->children_amount >= 1 && node->children_amount <= 2);
-        break;
-    case TXC_NAN: /* FALLTHROUGH */
-    case TXC_ADD: /* FALLTHROUGH */
-    case TXC_MUL:
-        break;
-    default:
-        assert(false);
-    }
-    if (node->children_amount <= 0)
-        return;
-    assert(node->children != NULL);
-    if (!recursive)
-        return;
-    for (size_t i = 0; i < node->children_amount; i++)
-        txc_node_assert_valid(node->children[i], recursive);
-}
-
 bool txc_node_test_valid(const struct txc_node *const node, const bool recursive)
 {
-    if (node == NULL)
+    if (node == NULL) {
+        TXC_ERROR_NULL("node");
         return false;
+    }
+    if (node->children_amount > 0 && node->children == NULL) {
+        TXC_ERROR_NULL("node children");
+        return false;
+    }
+    for (size_t i = 0; recursive && i < node->children_amount; i++) {
+        if (!txc_node_test_valid(node->children[i], recursive))
+            return false;
+    }
     switch (node->type) {
     case TXC_INT:
-        if (node->children_amount != 0)
+        if (node->children_amount != 0) {
+            TXC_ERROR_INVALID_CHILD_AMOUNT(node->type, node->children_amount);
             return false;
+        }
         if (!txc_int_test_valid(node->impl.integer))
             return false;
-        break;
+        return true;
     case TXC_NEG:
-        if (node->children_amount != 1)
+        if (node->children_amount != 1) {
+            TXC_ERROR_INVALID_CHILD_AMOUNT(node->type, node->children_amount);
             return false;
-        break;
+        }
+        return true;
     case TXC_FRAC:
-        if (node->children_amount < 1 || node->children_amount > 2)
+        if (node->children_amount < 1 || node->children_amount > 2) {
+            TXC_ERROR_INVALID_CHILD_AMOUNT(node->type, node->children_amount);
             return false;
-        break;
+        }
+        return true;
     case TXC_NAN: /* FALLTHROUGH */
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL:
-        break;
+        return true;
     default:
+        TXC_ERROR_INVALID_NODE_TYPE(node->type);
         return false;
     }
-    if (node->children_amount <= 0)
-        return true;
-    if (node->children == NULL)
-        return false;
-    if (!recursive)
-        return true;
-    for (size_t i = 0; i < node->children_amount; i++) {
-        const bool child_valid = txc_node_test_valid(node->children[i], recursive);
-        if (!child_valid)
-            return false;
-    }
-    return true;
 }
 
 /* MEMORY */
 
 static const struct txc_node *bake(struct txc_node *const node)
 {
-    txc_node_assert_valid(node, true);
+    assert(txc_node_test_valid(node, true));
     return node;
 }
 
-const struct txc_int *txc_node_to_int(const struct txc_node *const node)
+const txc_int *txc_node_to_int(const struct txc_node *const node)
 {
-    txc_node_assert_valid(node, true);
+    assert(txc_node_test_valid(node, true));
     return node->type == TXC_INT ? node->impl.integer : NULL;
 }
 
 const struct txc_node *txc_node_create(const struct txc_node *const *const children, const union impl impl, const size_t children_amount, const enum txc_node_type type)
 {
     for (size_t i = 0; i < children_amount; i++)
-        txc_node_assert_valid(children[i], true);
+        assert(txc_node_test_valid(children[i], true));
     struct txc_node *const node = malloc(sizeof *node);
     if (node == NULL) {
         TXC_ERROR_ALLOC(sizeof *node, "node");
@@ -199,7 +174,7 @@ const struct txc_node *txc_node_create_nan(const char *const reason)
 static const struct txc_node *init_op(const enum txc_node_type type, const struct txc_node *const *const children, const size_t children_amount)
 {
     for (size_t i = 0; i < children_amount; i++)
-        txc_node_assert_valid(children[i], true);
+        assert(txc_node_test_valid(children[i], true));
     struct txc_node *const node = malloc(sizeof *node);
     if (node == NULL) {
         TXC_ERROR_ALLOC(sizeof *node, "operation node");
@@ -218,6 +193,7 @@ const struct txc_node *txc_node_create_un_op(const enum txc_node_type type, cons
         TXC_ERROR_INVALID_NODE_TYPE(type);
         return &TXC_NAN_ERROR_INVALID_NODE_TYPE;
     }
+    assert(txc_node_test_valid(operand, true));
     const size_t arity = 1;
     const struct txc_node **const children = malloc(sizeof *children * arity);
     if (children == NULL) {
@@ -234,6 +210,8 @@ const struct txc_node *txc_node_create_bin_op(const enum txc_node_type type, con
         TXC_ERROR_INVALID_NODE_TYPE(type);
         return &TXC_NAN_ERROR_INVALID_NODE_TYPE;
     }
+    assert(txc_node_test_valid(operand_1, true));
+    assert(txc_node_test_valid(operand_2, true));
     const size_t arity = 2;
     const struct txc_node **const children = malloc(sizeof *children * arity);
     if (children == NULL) {
@@ -247,7 +225,7 @@ const struct txc_node *txc_node_create_bin_op(const enum txc_node_type type, con
 
 static struct txc_node *copy(const struct txc_node *const from, const bool write)
 {
-    txc_node_assert_valid(from, true);
+    assert(txc_node_test_valid(from, true));
     if (from->read_only)
         return (struct txc_node *)from;
     struct txc_node *copy = malloc(sizeof *copy);
@@ -304,13 +282,13 @@ static struct txc_node *copy(const struct txc_node *const from, const bool write
 const struct txc_node *txc_node_copy_read(const struct txc_node *const from)
 {
     // TODO catch read only
-    txc_node_assert_valid(from, true);
+    assert(txc_node_test_valid(from, true));
     return copy(from, false);
 }
 
 struct txc_node *txc_node_copy_write(const struct txc_node *const from)
 {
-    txc_node_assert_valid(from, true);
+    assert(txc_node_test_valid(from, true));
     return copy(from, true);
 }
 
@@ -318,7 +296,8 @@ void txc_node_free(const struct txc_node *const node)
 {
     if (node == NULL)
         return;
-    txc_node_assert_valid(node, false);
+    // TODO change back to true?
+    assert(txc_node_test_valid(node, false));
     if (node->read_only)
         return;
     for (size_t i = 0; i < node->children_amount; i++)
@@ -348,7 +327,7 @@ void txc_node_free(const struct txc_node *const node)
 
 const struct txc_node *txc_node_simplify(const struct txc_node *const node)
 {
-    txc_node_assert_valid(node, true);
+    assert(txc_node_test_valid(node, true));
     struct txc_node *copy = txc_node_copy_write(node);
     for (size_t i = 0; i < node->children_amount; i++) {
         txc_node_free(copy->children[i]);
@@ -374,7 +353,7 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
             txc_node_free(copy);
             return tmp;
         }
-        // TODO
+        // TODO shift up/down?
         default:
             return bake(copy);
         }
@@ -413,9 +392,10 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
         // TODO compacting finished
         size_t int_i = 0;
         size_t other_i = 0;
-        for (size_t i = 0; i < copy->children_amount; i++)
+        for (size_t i = 0; i < copy->children_amount; i++) {
             if (copy->children[i]->type == TXC_INT)
                 int_i++;
+        }
         if (int_i <= 0)
             return bake(copy);
         const txc_int *ints[int_i];
@@ -552,7 +532,7 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
             txc_node_free(copy);
             return &TXC_NAN_ERROR_ALLOC;
         }
-        const struct txc_node *const num_node = txc_int_to_node((struct txc_int *)txc_int_div(num, gcd));
+        const struct txc_node *const num_node = txc_int_to_node((txc_int *)txc_int_div(num, gcd));
         if (num_node->type == TXC_NAN) {
             txc_int_free(num);
             txc_int_free(den);
@@ -560,7 +540,7 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
             return num_node;
         }
         txc_int_free(num);
-        const struct txc_node *const den_node = txc_int_to_node((struct txc_int *)txc_int_div(den, gcd));
+        const struct txc_node *const den_node = txc_int_to_node((txc_int *)txc_int_div(den, gcd));
         if (den_node->type == TXC_NAN) {
             txc_int_free(den);
             txc_node_free(num_node);
@@ -635,7 +615,7 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
 static char *concat_children_in_paren(const struct txc_node *const *const children, const size_t amount, const bool reverse_children, const char *const pre, const char *const op, const char *const post)
 {
     for (size_t i = 0; i < amount; i++)
-        txc_node_assert_valid(children[i], true);
+        assert(txc_node_test_valid(children[i], true));
     size_t size = strlen(pre) + strlen(op) * (amount - 1) + strlen(post);
     char *child_strs[amount];
     for (size_t i = 0; i < amount; i++) {
@@ -668,7 +648,7 @@ static char *concat_children_in_paren(const struct txc_node *const *const childr
 
 char *txc_node_to_str(const struct txc_node *const node)
 {
-    txc_node_assert_valid(node, true);
+    assert(txc_node_test_valid(node, true));
     char *str = NULL;
     switch (node->type) {
     case TXC_NAN: {
@@ -704,7 +684,7 @@ char *txc_node_to_str(const struct txc_node *const node)
 
 void txc_node_print(const struct txc_node *const node)
 {
-    txc_node_assert_valid(node, true);
+    assert(txc_node_test_valid(node, true));
     char *str = txc_node_to_str(node);
     if (str == NULL) {
         printf(TXC_PRINT_FORMAT, TXC_PRINT_ERROR);
@@ -716,7 +696,7 @@ void txc_node_print(const struct txc_node *const node)
 
 void txc_node_print_if_debug(const struct txc_node *const node)
 {
-    txc_node_assert_valid(node, true);
+    assert(txc_node_test_valid(node, true));
 #if DEBUG
     txc_node_print(node);
 #endif /* DEBUG */
@@ -724,7 +704,7 @@ void txc_node_print_if_debug(const struct txc_node *const node)
 
 void txc_node_simplify_and_print(const struct txc_node *const node)
 {
-    txc_node_assert_valid(node, true);
+    assert(txc_node_test_valid(node, true));
     txc_node_print_if_debug(node);
     const struct txc_node *const simple_node = txc_node_simplify(node);
     txc_node_print(simple_node);

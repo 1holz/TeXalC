@@ -13,5 +13,4 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Run all
-      shell: bash
       run: make debug-full

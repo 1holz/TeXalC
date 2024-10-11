@@ -27,19 +27,27 @@
 #include "integer.h"
 #include "util.h"
 
-#define TXC_GROWTH_FACTOR 2
+#ifndef TXC_INT_GROWTH_FACTOR
+#define TXC_INT_GROWTH_FACTOR 2
+#endif /* TXC_INT_GROWTH_FACTOR */
 
+#ifndef TXC_INT_ARRAY_TYPE
 #define TXC_INT_ARRAY_TYPE unsigned char
+#endif /* TXC_INT_ARRAY_TYPE */
+#ifndef TXC_INT_ARRAY_TYPE_MAX
 #define TXC_INT_ARRAY_TYPE_MAX UCHAR_MAX
+#endif /* TXC_INT_ARRAY_TYPE_MAX */
+#ifndef TXC_INT_ARRAY_TYPE_WIDTH
 #define TXC_INT_ARRAY_TYPE_WIDTH CHAR_BIT
+#endif /* TXC_INT_ARRAY_TYPE_WIDTH */
 
 /* DEFINITIONS */
 
 struct txc_int {
-    TXC_INT_ARRAY_TYPE *data;
     size_t size;
     size_t used;
     bool neg;
+    TXC_INT_ARRAY_TYPE data[];
 };
 
 struct txc_txc_int_tuple {
@@ -49,24 +57,20 @@ struct txc_txc_int_tuple {
 
 /* VALID */
 
-void txc_int_assert_valid(const struct txc_int *const integer)
-{
-    assert(integer != NULL);
-    assert(integer->used <= integer->size);
-    if (integer->size > 0)
-        assert(integer->data != NULL);
-    if (integer->used > 0)
-        assert(integer->data[integer->used - 1] > 0);
-}
-
 bool txc_int_test_valid(const struct txc_int *const integer)
 {
-    if (integer == NULL || integer->used > integer->size)
+    if (integer == NULL) {
+        TXC_ERROR_NULL("txc_int");
         return false;
-    if (integer->size > 0 && integer->data == NULL)
+    }
+    if (integer->used > integer->size) {
+        TXC_ERROR_OUT_OF_BOUNDS(integer->used, integer->size);
         return false;
-    if (integer->used > 0 && integer->data[integer->used - 1] <= 0)
+    }
+    if (integer->used > 0 && integer->data[integer->used - 1] <= 0) {
+        TXC_ERROR_INT_LEADING_ZERO();
         return false;
+    }
     return true;
 }
 
@@ -76,7 +80,7 @@ const txc_node *txc_int_to_node(const struct txc_int *const integer)
 {
     if (integer == NULL)
         return &TXC_NAN_ERROR_ALLOC;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     union impl impl;
     impl.integer = (struct txc_int *)integer;
     return txc_node_create(NULL, impl, 0, TXC_INT);
@@ -84,22 +88,14 @@ const txc_node *txc_int_to_node(const struct txc_int *const integer)
 
 static struct txc_int *init(const size_t size)
 {
-    struct txc_int *const integer = malloc(sizeof *integer);
+    struct txc_int *const integer = malloc(sizeof *integer + sizeof *integer->data * size);
     if (integer == NULL) {
-        TXC_ERROR_ALLOC(sizeof *integer, "int");
+        TXC_ERROR_ALLOC(sizeof *integer + sizeof *integer->data * size, "int");
         return NULL;
     }
     integer->size = size;
     integer->used = 0;
     integer->neg = false;
-    if (size == 0)
-        return integer;
-    integer->data = malloc(sizeof *integer->data * size);
-    if (integer->data == NULL) {
-        TXC_ERROR_ALLOC(sizeof *integer->data * size, "initial data");
-        free(integer);
-        return NULL;
-    }
     return integer;
 }
 
@@ -107,33 +103,30 @@ static struct txc_int *inc_size(struct txc_int *const integer, size_t new_size)
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     if (integer->used >= SIZE_MAX)
         return integer;
-    const size_t max_size = SIZE_MAX / sizeof *integer->data;
+    const size_t max_size = SIZE_MAX / sizeof *integer->data - sizeof *integer;
     if (new_size >= max_size)
         new_size = max_size;
     if (new_size <= integer->size)
         return integer;
-    if (integer->size == 0)
-        integer->data = NULL;
-    TXC_INT_ARRAY_TYPE *tmp = realloc(integer->data, sizeof *integer->data * new_size);
+    struct txc_int *tmp = realloc(integer, sizeof *integer + sizeof *integer->data * new_size);
     if (tmp == NULL) {
         txc_int_free(integer);
-        TXC_ERROR_ALLOC(sizeof *integer->data * new_size, "new size");
+        TXC_ERROR_ALLOC(sizeof *integer + sizeof *integer->data * new_size, "new size");
         return NULL;
     }
-    integer->data = tmp;
-    integer->size = new_size;
-    return integer;
+    tmp->size = new_size;
+    return tmp;
 }
 
 static struct txc_int *inc(struct txc_int *const integer)
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
-    size_t new_size = integer->used * TXC_GROWTH_FACTOR;
+    assert(txc_int_test_valid(integer));
+    size_t new_size = integer->used * TXC_INT_GROWTH_FACTOR;
     if (new_size <= integer->used)
         new_size = integer->used++;
     return inc_size(integer, new_size);
@@ -145,19 +138,14 @@ static struct txc_int *fit(struct txc_int *const integer)
         return NULL;
     while (integer->used > 0 && integer->data[integer->used - 1] == 0)
         integer->used--;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
+    if (integer->used == 0)
+        integer->neg = false;
     if (integer->size == integer->used)
         return integer;
-    if (integer->used == 0) {
-        free(integer->data);
-        integer->size = 0;
-        integer->neg = false;
-        return integer;
-    }
-    TXC_INT_ARRAY_TYPE *tmp = realloc(integer->data, sizeof *integer->data * integer->used);
+    struct txc_int *tmp = realloc(integer, sizeof *integer + sizeof *integer->data * integer->used);
     if (tmp == NULL)
         return integer;
-    integer->data = tmp;
     integer->size = integer->used;
     return integer;
 }
@@ -166,7 +154,7 @@ static struct txc_int *from_bin_str(struct txc_int *const integer, const char *c
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     for (size_t i = 0; i < len; i++)
         assert('0' <= str[i] && str[i] <= '1');
     const size_t bin_width = 1;
@@ -185,7 +173,7 @@ static struct txc_int *from_dec_str(struct txc_int *const integer, const char *c
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     for (size_t i = 0; i < len; i++)
         assert('0' <= str[i] && str[i] <= '9');
     const size_t dec_width = 4;
@@ -229,7 +217,7 @@ static struct txc_int *from_hex_str(struct txc_int *const integer, const char *c
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     for (size_t i = 0; i < len; i++)
         assert(('0' <= str[i] && str[i] <= '9') || ('A' <= str[i] && str[i] <= 'F') || ('a' <= str[i] && str[i] <= 'f'));
     const size_t hex_width = 4;
@@ -248,7 +236,7 @@ static struct txc_int *from_hex_str(struct txc_int *const integer, const char *c
 const struct txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base)
 {
     if (base != 2 && base != 10 && base != 16) {
-        TXC_ERROR_NYI();
+        TXC_ERROR_NYI("Bases other than 2, 10 or 16");
         return &TXC_NAN_ERROR_NYI;
     }
     const char *cur = str;
@@ -300,15 +288,13 @@ struct txc_int *txc_int_copy(const struct txc_int *const from)
 {
     if (from == NULL)
         return NULL;
-    txc_int_assert_valid(from);
+    assert(txc_int_test_valid(from));
     struct txc_int *copy = init(from->used);
     if (copy == NULL)
         return NULL;
     copy->used = from->used;
     copy->size = from->used;
     copy->neg = from->neg;
-    if (copy->size == 0)
-        return copy;
     for (size_t i = 0; i < copy->used; i++)
         copy->data[i] = from->data[i];
     return copy;
@@ -318,9 +304,7 @@ void txc_int_free(const struct txc_int *const integer)
 {
     if (integer == NULL)
         return;
-    txc_int_assert_valid(integer);
-    if (integer->size > 0)
-        free(integer->data);
+    assert(txc_int_test_valid(integer));
     free((struct txc_int *)integer);
 }
 
@@ -330,7 +314,7 @@ bool txc_int_is_pos_one(const struct txc_int *const test)
 {
     if (test == NULL)
         return false;
-    txc_int_assert_valid(test);
+    assert(txc_int_test_valid(test));
     return test->used == 1 && test->neg == false && test->data[0] == 1;
 }
 
@@ -338,7 +322,7 @@ bool txc_int_is_zero(const struct txc_int *const test)
 {
     if (test == NULL)
         return false;
-    txc_int_assert_valid(test);
+    assert(txc_int_test_valid(test));
     return test->used == 0;
 }
 
@@ -346,7 +330,7 @@ bool txc_int_is_neg_one(const struct txc_int *const test)
 {
     if (test == NULL)
         return false;
-    txc_int_assert_valid(test);
+    assert(txc_int_test_valid(test));
     return test->used == 1 && test->neg == true && test->data[0] == 1;
 }
 
@@ -354,7 +338,7 @@ bool txc_int_is_neg(const struct txc_int *const test)
 {
     if (test == NULL)
         return false;
-    txc_int_assert_valid(test);
+    assert(txc_int_test_valid(test));
     return test->neg == true && !txc_int_is_zero(test);
 }
 
@@ -362,7 +346,7 @@ static struct txc_int *shift_bigger(struct txc_int *integer)
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     if (integer->used >= integer->size && integer->data[integer->used - 1] > TXC_INT_ARRAY_TYPE_MAX / 2) {
         integer = inc(integer);
         if (integer == NULL)
@@ -387,7 +371,7 @@ static struct txc_int *shift_bigger_amount(struct txc_int *integer, const size_t
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     for (size_t i = 0; i < amount; i++)
         integer = shift_bigger(integer);
     return integer;
@@ -397,7 +381,7 @@ static struct txc_int *shift_bigger_wide_amount(struct txc_int *integer, const s
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     integer = inc_size(integer, integer->used + bytes);
     if (integer == NULL)
         return NULL;
@@ -411,7 +395,7 @@ static struct txc_int *shift_bigger_wide_amount(struct txc_int *integer, const s
 
 static struct txc_int *shift_smaller(struct txc_int *const integer)
 {
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     if (txc_int_is_zero(integer))
         return integer;
     for (size_t i = 0; i < integer->used - 1; i++) {
@@ -422,18 +406,15 @@ static struct txc_int *shift_smaller(struct txc_int *const integer)
     integer->data[integer->used - 1] >>= 1;
     if (integer->data[integer->used - 1] == 0) {
         integer->used--;
-        if (integer->used <= 0) {
-            free(integer->data);
+        if (integer->used <= 0)
             integer->neg = false;
-            integer->size = 0;
-        }
     }
     return integer;
 }
 
 static struct txc_int *shift_smaller_amount(struct txc_int *integer, size_t amount)
 {
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     for (size_t i = 0; i < amount && integer->used > 0; i++)
         integer = shift_smaller(integer);
     return integer;
@@ -441,7 +422,7 @@ static struct txc_int *shift_smaller_amount(struct txc_int *integer, size_t amou
 
 static struct txc_int *shift_smaller_wide_amount(struct txc_int *const integer, size_t bytes, const size_t bits)
 {
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     if (bytes > integer->used)
         bytes = integer->used;
     integer->used = integer->used - bytes;
@@ -452,8 +433,8 @@ static struct txc_int *shift_smaller_wide_amount(struct txc_int *const integer, 
 
 int_fast8_t txc_int_cmp_abs(const struct txc_int *const a, const struct txc_int *const b)
 {
-    txc_int_assert_valid(a);
-    txc_int_assert_valid(b);
+    assert(txc_int_test_valid(a));
+    assert(txc_int_test_valid(b));
     if (a->used == 0 && b->used == 0)
         return 0;
     if (a->used < b->used)
@@ -472,8 +453,8 @@ int_fast8_t txc_int_cmp_abs(const struct txc_int *const a, const struct txc_int 
 
 int_fast8_t txc_int_cmp(const struct txc_int *const a, const struct txc_int *const b)
 {
-    txc_int_assert_valid(a);
-    txc_int_assert_valid(b);
+    assert(txc_int_test_valid(a));
+    assert(txc_int_test_valid(b));
     if (a->used == 0 && b->used == 0)
         return 0;
     if (a->neg && !b->neg)
@@ -487,7 +468,7 @@ struct txc_int *txc_int_neg(struct txc_int *const integer)
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     integer->neg = !integer->neg;
     return integer;
 }
@@ -500,8 +481,8 @@ static struct txc_int *add_acc(struct txc_int *acc, const struct txc_int *const 
         txc_int_free(acc);
         return NULL;
     }
-    txc_int_assert_valid(acc);
-    txc_int_assert_valid(summand);
+    assert(txc_int_test_valid(acc));
+    assert(txc_int_test_valid(summand));
     bool carry = false;
     if (acc->neg != summand->neg) {
         const int_fast8_t abs_cmp = txc_int_cmp_abs(acc, summand);
@@ -570,11 +551,11 @@ struct txc_int *txc_int_add(const struct txc_int *const *const summands, const s
     for (size_t i = 0; i < len; i++) {
         if (summands[i] == NULL)
             return NULL;
-        txc_int_assert_valid(summands[i]);
+        assert(txc_int_test_valid(summands[i]));
     }
     struct txc_int *acc = txc_int_create_zero();
     for (size_t i = 0; i < len; i++) {
-        if (summands[i]->used > 0)
+        if (!txc_int_is_zero(summands[i]))
             acc = add_acc(acc, summands[i]);
     }
     return acc == NULL ? acc : fit(acc);
@@ -589,7 +570,7 @@ struct txc_int *txc_int_mul(const struct txc_int *const *const factors, const si
     for (size_t i = 0; i < len; i++) {
         if (factors[i] == NULL)
             return NULL;
-        txc_int_assert_valid(factors[i]);
+        assert(txc_int_test_valid(factors[i]));
     }
     for (size_t i = 0; i < len; i++) {
         if (txc_int_is_zero(factors[i]))
@@ -638,7 +619,7 @@ static struct txc_size_t_tuple int_ffs(const struct txc_int *const integer)
         const struct txc_size_t_tuple result = { .a = 0, .b = 0 };
         return result;
     }
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     for (size_t i = 0; i < integer->used; i++) {
         if (integer->data[i] == 0)
             continue;
@@ -658,8 +639,8 @@ const struct txc_int *txc_int_gcd(const struct txc_int *const aa, const struct t
 {
     if (aa == NULL || bb == NULL)
         return NULL;
-    txc_int_assert_valid(aa);
-    txc_int_assert_valid(bb);
+    assert(txc_int_test_valid(aa));
+    assert(txc_int_test_valid(bb));
     if (txc_int_is_zero(aa))
         return txc_int_copy(bb);
     if (txc_int_is_zero(bb))
@@ -705,8 +686,8 @@ static struct txc_txc_int_tuple *div_mod(const struct txc_int *const dividend, c
 {
     if (dividend == NULL || divisor == NULL)
         return NULL;
-    txc_int_assert_valid(dividend);
-    txc_int_assert_valid(divisor);
+    assert(txc_int_test_valid(dividend));
+    assert(txc_int_test_valid(divisor));
     assert(!txc_int_is_zero(divisor));
     struct txc_int *const div = txc_int_create_zero();
     struct txc_int *const mod = txc_int_copy(dividend);
@@ -777,7 +758,7 @@ char *txc_int_to_str(const struct txc_int *const integer)
 {
     if (integer == NULL)
         return NULL;
-    txc_int_assert_valid(integer);
+    assert(txc_int_test_valid(integer));
     if (integer->used == 0) {
         char *str = txc_strdup("0");
         if (str == NULL)

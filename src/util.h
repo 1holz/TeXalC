@@ -18,10 +18,16 @@
 #ifndef TXC_UTIL
 #define TXC_UTIL
 
-#define TXC_ERROR_ALLOC(bytes, purpose) fprintf(stderr, "Could not allocate %zu bytes of memory for %s at %s:%d.\n", bytes, purpose, __FILE__, __LINE__)
-#define TXC_ERROR_INVALID_NODE_TYPE(type) fprintf(stderr, "Node type %u is invalid at %s:%d.\n", type, __FILE__, __LINE__)
-#define TXC_ERROR_NYI() fprintf(stderr, "Not yet implemented at %s:%d.\n", __FILE__, __LINE__)
-#define TXC_ERROR_OVERFLOW(cause) fprintf(stderr, "Overflow was caught for %s in %s line %d.\n", cause, __FILE__, __LINE__)
+#include "common.h"
+
+#define TXC_ERROR_ALLOC(bytes, purpose) fprintf(stderr, "Allocating %zu bytes of memory failed for %s at %s:%u.\n", bytes, purpose, __FILE__, __LINE__)
+#define TXC_ERROR_INVALID_CHILD_AMOUNT(type, amount) fprintf(stderr, "Node of type %u must not have %zu children at %s:%u.\n", type, amount, __FILE__, __LINE__)
+#define TXC_ERROR_INVALID_NODE_TYPE(type) fprintf(stderr, "Node type %u is invalid at %s:%u.\n", type, __FILE__, __LINE__)
+#define TXC_ERROR_INT_LEADING_ZERO() fprintf(stderr, "Integer must not have leading zero bytes at %s:%u.\n", __FILE__, __LINE__)
+#define TXC_ERROR_NULL(object) fprintf(stderr, "NULL is not allowed for %s at %s:%u.\n", object, __FILE__, __LINE__)
+#define TXC_ERROR_NYI(feature) fprintf(stderr, "%s is/are not yet implemented at %s:%u.\n", feature, __FILE__, __LINE__)
+#define TXC_ERROR_OVERFLOW(cause) fprintf(stderr, "Overflow was caught for %s in %s line %u.\n", cause, __FILE__, __LINE__)
+#define TXC_ERROR_OUT_OF_BOUNDS(index, bound) fprintf(stderr, "Index %u out of bound %u in %s line %u.\n", index, bound, __FILE__, __LINE__)
 
 struct txc_size_t_tuple {
     size_t a;

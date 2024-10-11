@@ -75,94 +75,12 @@ $(EXE): $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/texalc.o
 $(EXE)-test: $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/test.o
 	$(CC) $(CFLAGS) $^ -o $(EXE)-test
 
-.PHONY: test
-test: check
-
 .PHONY: check
-check: $(EXE)-test
-	@./$(EXE)-test test_start; true
-	@fails=0; \
-	passes=0; \
-	if ./$(EXE)-test test_test; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_one; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_zero; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_copy; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_create_bin; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_create_dec; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_create_hex; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_unsigned_add; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_signed_add; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_unsigned_mul; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_signed_mul; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_gcd; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_div_invalid; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_div; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	if ./$(EXE)-test integer_to_str; then \
-		((passes++)); \
-	else \
-		((fails++)); \
-	fi; \
-	echo ========; \
-	echo PASS: $$passes; \
-	echo FAIL: $$fails; \
-	echo ========; \
-	exit $$fails
+check: test
+
+.PHONY: test
+test: $(EXE)-test
+	./test.sh
 
 .PHONY: clean
 clean:
