@@ -50,11 +50,6 @@ struct txc_int {
     TXC_INT_ARRAY_TYPE data[];
 };
 
-struct txc_txc_int_tuple {
-    txc_int *a;
-    txc_int *b;
-};
-
 /* VALID */
 
 bool txc_int_test_valid(const struct txc_int *const integer)
@@ -143,11 +138,13 @@ static struct txc_int *fit(struct txc_int *const integer)
         integer->neg = false;
     if (integer->size == integer->used)
         return integer;
-    struct txc_int *tmp = realloc(integer, sizeof *integer + sizeof *integer->data * integer->used);
-    if (tmp == NULL)
+    struct txc_int *const fitted = realloc(integer, sizeof *integer + sizeof *integer->data * integer->used);
+    if (fitted == NULL) {
+        TXC_ERROR_ALLOC(sizeof *integer + sizeof *integer->data * integer->used, "fitted integer");
         return integer;
-    integer->size = integer->used;
-    return integer;
+    }
+    fitted->size = fitted->used;
+    return fitted;
 }
 
 static struct txc_int *from_bin_str(struct txc_int *const integer, const char *const str, const size_t len)
@@ -635,7 +632,7 @@ static struct txc_size_t_tuple int_ffs(const struct txc_int *const integer)
 }
 
 // based on https://de.wikipedia.org/wiki/Steinscher_Algorithmus
-const struct txc_int *txc_int_gcd(const struct txc_int *const aa, const struct txc_int *const bb)
+struct txc_int *txc_int_gcd(const struct txc_int *const aa, const struct txc_int *const bb)
 {
     if (aa == NULL || bb == NULL)
         return NULL;
@@ -682,74 +679,46 @@ const struct txc_int *txc_int_gcd(const struct txc_int *const aa, const struct t
 }
 
 // FIXME calculates remainder instead of mod
-static struct txc_txc_int_tuple *div_mod(const struct txc_int *const dividend, const struct txc_int *const divisor)
+static struct txc_int *div_mod(const struct txc_int *const dividend, const struct txc_int *const divisor, const bool do_mod)
 {
     if (dividend == NULL || divisor == NULL)
         return NULL;
     assert(txc_int_test_valid(dividend));
     assert(txc_int_test_valid(divisor));
     assert(!txc_int_is_zero(divisor));
-    struct txc_int *const div = txc_int_create_zero();
-    struct txc_int *const mod = txc_int_copy(dividend);
+    struct txc_int *div = txc_int_create_zero();
+    struct txc_int *mod = txc_int_copy(dividend);
     const struct txc_int *const one = txc_int_create_one();
-    struct txc_txc_int_tuple *const result = malloc(sizeof *result);
-    if (div == NULL || mod == NULL || one == NULL) {
-        txc_int_free(div);
-        txc_int_free(mod);
-        txc_int_free(one);
-        if (result == NULL)
-            TXC_ERROR_ALLOC(sizeof *result, "divison/modulo result");
-        else
-            free(result);
-        return NULL;
-    }
     div->neg = false;
     mod->neg = false;
-    result->a = div;
-    result->b = mod;
-    while (txc_int_cmp_abs(result->b, divisor) >= 0) {
-        struct txc_int *tmp = add_acc(result->a, one);
-        if (tmp == NULL) {
-            txc_int_free(result->b);
-            txc_int_free(one);
-            free(result);
-            return NULL;
-        }
-        result->a = tmp;
-        result->b->neg = !divisor->neg;
-        tmp = add_acc(result->b, divisor);
-        if (tmp == NULL) {
-            txc_int_free(result->a);
-            txc_int_free(one);
-            free(result);
-            return NULL;
-        }
-        result->b = tmp;
+    while (txc_int_cmp_abs(mod, divisor) >= 0) {
+        div = add_acc(div, one);
+        if (div == NULL)
+            goto clean;
+        mod->neg = !divisor->neg;
+        mod = add_acc(mod, divisor);
+        if (mod == NULL)
+            goto clean;
     }
     txc_int_free(one);
-    result->a->neg = dividend->neg ^ divisor->neg;
-    result->b->neg = false;
-    return result;
+    div->neg = dividend->neg ^ divisor->neg;
+    mod->neg = false;
+    return do_mod ? mod : div;
+clean:
+    txc_int_free(one);
+    txc_int_free(div);
+    txc_int_free(mod);
+    return NULL;
 }
 
-const struct txc_int *txc_int_div(const struct txc_int *const dividend, const struct txc_int *const divisor)
+struct txc_int *txc_int_div(const struct txc_int *const dividend, const struct txc_int *const divisor)
 {
-    struct txc_txc_int_tuple *const tmp1 = div_mod(dividend, divisor);
-    if (tmp1 == NULL)
-        return NULL;
-    const struct txc_int *const tmp2 = tmp1->a;
-    free(tmp1);
-    return tmp2;
+    return div_mod(dividend, divisor, false);
 }
 
-const struct txc_int *txc_int_mod(const struct txc_int *const dividend, const struct txc_int *const divisor)
+struct txc_int *txc_int_mod(const struct txc_int *const dividend, const struct txc_int *const divisor)
 {
-    struct txc_txc_int_tuple *const tmp1 = div_mod(dividend, divisor);
-    if (tmp1 == NULL)
-        return NULL;
-    const struct txc_int *const tmp2 = tmp1->b;
-    free(tmp1);
-    return tmp2;
+    return div_mod(dividend, divisor, true);
 }
 
 /* PRINT */

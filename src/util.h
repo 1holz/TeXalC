@@ -27,7 +27,7 @@
 #define TXC_ERROR_NULL(object) fprintf(stderr, "NULL is not allowed for %s at %s:%u.\n", object, __FILE__, __LINE__)
 #define TXC_ERROR_NYI(feature) fprintf(stderr, "%s is/are not yet implemented at %s:%u.\n", feature, __FILE__, __LINE__)
 #define TXC_ERROR_OVERFLOW(cause) fprintf(stderr, "Overflow was caught for %s in %s line %u.\n", cause, __FILE__, __LINE__)
-#define TXC_ERROR_OUT_OF_BOUNDS(index, bound) fprintf(stderr, "Index %u out of bound %u in %s line %u.\n", index, bound, __FILE__, __LINE__)
+#define TXC_ERROR_OUT_OF_BOUNDS(index, bound) fprintf(stderr, "Index %zu out of bound %zu in %s line %u.\n", index, bound, __FILE__, __LINE__)
 
 struct txc_size_t_tuple {
     size_t a;

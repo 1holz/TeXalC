@@ -23,6 +23,8 @@
 
 int main(int argc, char **argv)
 {
+    (void)argc;
+    (void)argv;
     printf("This is TeXalC %u.%u.%u, a fancy calculator!\n", TXC_VERSION_MAJOR, TXC_VERSION_MINOR, TXC_VERSION_PATCH);
     int exit_code = yyparse();
     printf("Exiting TeXalC\n");

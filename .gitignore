@@ -58,3 +58,4 @@ LICENSE_HEADER
 .vscode
 *.tmp
 .clang-format
+vgcore.*

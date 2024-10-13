@@ -68,11 +68,11 @@ extern txc_int *txc_int_add(const txc_int *const *const summands, const size_t l
 
 extern txc_int *txc_int_mul(const txc_int *const *const factors, const size_t len);
 
-extern const txc_int *txc_int_gcd(const txc_int *const aa, const txc_int *const bb);
+extern txc_int *txc_int_gcd(const txc_int *const aa, const txc_int *const bb);
 
-extern const txc_int *txc_int_div(const txc_int *const dividend, const txc_int *const divisor);
+extern txc_int *txc_int_div(const txc_int *const dividend, const txc_int *const divisor);
 
-// extern const txc_int *txc_int_mod(const txc_int *const dividend, const txc_int *const divisor);
+// extern txc_int *txc_int_mod(const txc_int *const dividend, const txc_int *const divisor);
 
 /* PRINT */
 

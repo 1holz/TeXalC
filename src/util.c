@@ -24,7 +24,7 @@
 char *txc_strdup(const char *const str)
 {
 #if (_POSIX_VERSION >= 200809L)
-    return stpdup(str);
+    return strdup(str);
 #else /* _POSIX_VERSION >= 200809L */
     assert(str != NULL);
     size_t len = strlen(str);
