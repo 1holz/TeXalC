@@ -44,6 +44,7 @@ typedef struct txc_node txc_node;
 
 extern const txc_node TXC_NAN_ERROR_ALLOC;
 extern const txc_node TXC_NAN_ERROR_INVALID_NODE_TYPE;
+extern const txc_node TXC_NAN_ERROR_OVERFLOW;
 extern const txc_node TXC_NAN_ERROR_NYI;
 extern const txc_node TXC_NAN_UNSPECIFIED;
 extern const txc_node TXC_NAN_ZERO_DIVISION;

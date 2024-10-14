@@ -74,7 +74,7 @@ bool txc_int_test_valid(const struct txc_int *const integer)
 const txc_node *txc_int_to_node(const struct txc_int *const integer)
 {
     if (integer == NULL)
-        return &TXC_NAN_ERROR_ALLOC;
+        return &TXC_NAN_ERROR_ALLOC; // TODO other causes for NULL?
     assert(txc_int_test_valid(integer));
     union impl impl;
     impl.integer = (struct txc_int *)integer;

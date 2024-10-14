@@ -25,9 +25,10 @@
 #include "util.h"
 
 #define TXC_NAN_REASON "\\text{NAN(%s)}"
-#define TXC_NAN_REASON_ERROR_NYI "Not yet implemented. Please see stderr for more information."
 #define TXC_NAN_REASON_ERROR_ALLOC "Could not allocate enough memory. Please see stderr for more information."
 #define TXC_NAN_REASON_ERROR_INVALID_NODE_TYPE "Node type is invalid. Please see stderr for more information."
+#define TXC_NAN_REASON_ERROR_NYI "Not yet implemented. Please see stderr for more information."
+#define TXC_NAN_REASON_ERROR_OVERFLOW "Overflow occured. Please see stderr for more information."
 #define TXC_NAN_REASON_UNSPECIFIED "unspecified"
 #define TXC_NAN_REASON_ZERO_DIVISION "Divided by 0."
 
@@ -56,6 +57,10 @@ const struct txc_node TXC_NAN_ERROR_INVALID_NODE_TYPE = { .impl.reason = TXC_NAN
                                                           .type = TXC_NAN,
                                                           .read_only = true };
 const struct txc_node TXC_NAN_ERROR_NYI = { .impl.reason = TXC_NAN_REASON_ERROR_NYI,
+                                            .children_amount = 0,
+                                            .type = TXC_NAN,
+                                            .read_only = true };
+const struct txc_node TXC_NAN_ERROR_OVERFLOW = { .impl.reason = TXC_NAN_REASON_ERROR_OVERFLOW,
                                             .children_amount = 0,
                                             .type = TXC_NAN,
                                             .read_only = true };
