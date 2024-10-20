@@ -15,19 +15,21 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef TXC_MEMORY
+#define TXC_MEMORY
+
 #include "common.h"
 
-#include <stdio.h>
+#include "util.h"
 
-#include "memory.h"
-#include "parser.h"
+extern txc_mem_gc *txc_mem_gc_init(void);
 
-int main(int argc, char **argv)
-{
-    (void)argc;
-    (void)argv;
-    printf("This is TeXalC %u.%u.%u, a fancy calculator!\n", TXC_VERSION_MAJOR, TXC_VERSION_MINOR, TXC_VERSION_PATCH);
-    int exit_code = yyparse(txc_mem_gc_init());
-    printf("Exiting TeXalC\n");
-    return exit_code;
-}
+extern const struct txc_node *txc_mem_gc_bake(txc_mem_gc *gc, const struct txc_node *const node);
+
+extern const struct txc_node *txc_mem_gc_copy(txc_mem_gc *gc, const struct txc_node *const node);
+
+extern txc_mem_gc *txc_mem_gc_free(txc_mem_gc *gc, const struct txc_node *const node);
+
+extern void txc_mem_gc_clean(struct txc_mem_gc *gc);
+
+#endif /* TXC_MEMORY */

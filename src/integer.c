@@ -71,14 +71,14 @@ bool txc_int_test_valid(const struct txc_int *const integer)
 
 /* MEMORY */
 
-const txc_node *txc_int_to_node(const struct txc_int *const integer)
+const struct txc_node *txc_int_to_node(txc_mem_gc *const gc, const struct txc_int *const integer)
 {
     if (integer == NULL)
         return &TXC_NAN_ERROR_ALLOC; // TODO other causes for NULL?
     assert(txc_int_test_valid(integer));
     union impl impl;
     impl.integer = (struct txc_int *)integer;
-    return txc_node_create(NULL, impl, 0, TXC_INT);
+    return txc_node_create(gc, NULL, impl, 0, TXC_INT);
 }
 
 static struct txc_int *init(const size_t size)
@@ -230,7 +230,7 @@ static struct txc_int *from_hex_str(struct txc_int *const integer, const char *c
     return integer;
 }
 
-const struct txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base)
+const struct txc_node *txc_int_create_int_node(txc_mem_gc *const gc, const char *const str, size_t len, const uint_fast8_t base)
 {
     if (base != 2 && base != 10 && base != 16) {
         TXC_ERROR_NYI("Bases other than 2, 10 or 16");
@@ -243,7 +243,7 @@ const struct txc_node *txc_int_create_int_node(const char *const str, size_t len
     for (; cur[0] == '0'; len--) // potencial buffer overflow when only 0 though this should be caught by lexer already
         cur++;
     if (len <= 0)
-        return txc_int_to_node(txc_int_create_zero());
+        return txc_int_to_node(gc, txc_int_create_zero());
     size_t chars_per_elem = TXC_INT_ARRAY_TYPE_WIDTH / width;
     txc_int *integer = init(len / chars_per_elem + 1);
     if (integer == NULL)
@@ -260,7 +260,7 @@ const struct txc_node *txc_int_create_int_node(const char *const str, size_t len
         integer = from_hex_str(integer, cur, len);
         break;
     }
-    return txc_int_to_node(fit(integer));
+    return txc_int_to_node(gc, fit(integer));
 }
 
 struct txc_int *txc_int_create_zero(void)

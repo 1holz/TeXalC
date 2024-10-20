@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "integer.h"
+#include "memory.h"
 #include "node.h"
 
 #define TEST(test)                        \
@@ -118,7 +119,8 @@ static int integer_copy(void)
     if (txc_int_copy(NULL) != NULL)
         return 1;
     int ec = 0;
-    const txc_node *const node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    const struct txc_node *const node = txc_int_create_int_node(gc, MUL_SOL, strlen(MUL_SOL), 10);
     if (!txc_node_test_valid(node, true)) {
         ec = 2;
         goto clean_node_only;
@@ -146,14 +148,17 @@ clean_1:
     txc_int_free(int_1);
 clean_2:
     txc_int_free(int_2);
+    txc_mem_gc_clean(gc);
     return ec;
 clean_node_only:
     txc_node_free(node);
+    txc_mem_gc_clean(gc);
     return ec;
 }
 
-static int integer_create(const txc_node *a, const txc_node *b)
+static int integer_create(txc_mem_gc *const gc, const struct txc_node *a, const struct txc_node *b)
 {
+    txc_mem_gc_clean(gc);
     if (txc_int_neg(NULL) != NULL)
         return 1;
     int ec = 0;
@@ -217,23 +222,26 @@ clean_ints:
 
 static int integer_create_bin(void)
 {
-    return integer_create(
-        txc_int_create_int_node(BIN_1, 225, 2),
-        txc_int_create_int_node(BIN_2, 225, 2));
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    return integer_create(gc,
+                          txc_int_create_int_node(gc, BIN_1, 225, 2),
+                          txc_int_create_int_node(gc, BIN_2, 225, 2));
 }
 
 static int integer_create_dec(void)
 {
-    return integer_create(
-        txc_int_create_int_node(DEC_1, 143, 10),
-        txc_int_create_int_node(DEC_2, 143, 10));
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    return integer_create(gc,
+                          txc_int_create_int_node(gc, DEC_1, 143, 10),
+                          txc_int_create_int_node(gc, DEC_2, 143, 10));
 }
 
 static int integer_create_hex(void)
 {
-    return integer_create(
-        txc_int_create_int_node(HEX_1, 218, 16),
-        txc_int_create_int_node(HEX_2, 218, 16));
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    return integer_create(gc,
+                          txc_int_create_int_node(gc, HEX_1, 218, 16),
+                          txc_int_create_int_node(gc, HEX_2, 218, 16));
 }
 
 static int integer_add_mul(const enum op op, const char *const operand_strs[5], const char *const solution_str)
@@ -243,12 +251,13 @@ static int integer_add_mul(const enum op op, const char *const operand_strs[5], 
     const bool neg = op == SIGNED_ADD || op == SIGNED_MUL;
     const bool mul = op == UNSIGNED_MUL || op == SIGNED_MUL;
     int ec = 0;
-    const txc_node *const operand_nodes[5] = {
-        txc_int_create_int_node(operand_strs[0], strlen(operand_strs[0]), 10),
-        txc_int_create_int_node(operand_strs[1], strlen(operand_strs[1]), 10),
-        txc_int_create_int_node(operand_strs[2], strlen(operand_strs[2]), 10),
-        txc_int_create_int_node(operand_strs[3], strlen(operand_strs[3]), 10),
-        txc_int_create_int_node(operand_strs[4], strlen(operand_strs[4]), 10)
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    const struct txc_node *const operand_nodes[5] = {
+        txc_int_create_int_node(gc, operand_strs[0], strlen(operand_strs[0]), 10),
+        txc_int_create_int_node(gc, operand_strs[1], strlen(operand_strs[1]), 10),
+        txc_int_create_int_node(gc, operand_strs[2], strlen(operand_strs[2]), 10),
+        txc_int_create_int_node(gc, operand_strs[3], strlen(operand_strs[3]), 10),
+        txc_int_create_int_node(gc, operand_strs[4], strlen(operand_strs[4]), 10)
     };
     for (size_t i = 0; i < 5; i++) {
         if (txc_node_test_valid(operand_nodes[i], true))
@@ -269,7 +278,7 @@ static int integer_add_mul(const enum op op, const char *const operand_strs[5], 
         ec = 3;
         goto clean;
     }
-    const txc_node *const solution_node = txc_int_create_int_node(solution_str, strlen(solution_str), 10);
+    const struct txc_node *const solution_node = txc_int_create_int_node(gc, solution_str, strlen(solution_str), 10);
     if (!txc_node_test_valid(solution_node, true)) {
         ec = 4;
         goto clean;
@@ -315,6 +324,7 @@ clean:
     txc_node_free(solution_node);
     for (size_t i = 0; i < 5; i++)
         txc_node_free(operand_nodes[i]);
+    txc_mem_gc_clean(gc);
     return ec;
 }
 
@@ -357,10 +367,11 @@ static int integer_gcd(void)
     if (txc_int_mul(NULL, 1) != NULL)
         return 2;
     int ec = 0;
-    const txc_node *const gcd_node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
-    const txc_node *const two_node = txc_int_create_int_node(TWO, strlen(TWO), 10);
-    const txc_node *const a_node = txc_int_create_int_node(UNSIGNED_ADD_SOL, strlen(UNSIGNED_ADD_SOL), 10);
-    const txc_node *const b_node = txc_int_create_int_node(SIGNED_ADD_SOL, strlen(SIGNED_ADD_SOL), 10);
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    const struct txc_node *const gcd_node = txc_int_create_int_node(gc, MUL_SOL, strlen(MUL_SOL), 10);
+    const struct txc_node *const two_node = txc_int_create_int_node(gc, TWO, strlen(TWO), 10);
+    const struct txc_node *const a_node = txc_int_create_int_node(gc, UNSIGNED_ADD_SOL, strlen(UNSIGNED_ADD_SOL), 10);
+    const struct txc_node *const b_node = txc_int_create_int_node(gc, SIGNED_ADD_SOL, strlen(SIGNED_ADD_SOL), 10);
     if (!txc_node_test_valid(gcd_node, true) || !txc_node_test_valid(a_node, true) || !txc_node_test_valid(b_node, true)) {
         ec = 3;
         goto clean_nodes;
@@ -417,6 +428,7 @@ clean_nodes:
     txc_node_free(two_node);
     txc_node_free(a_node);
     txc_node_free(b_node);
+    txc_mem_gc_clean(gc);
     return ec;
 }
 
@@ -444,9 +456,10 @@ clean:
 static int integer_div(void)
 {
     int ec = 0;
-    const txc_node *const prod_node = txc_int_create_int_node(DEC_1, strlen(DEC_1), 10);
-    const txc_node *const div_node = txc_int_create_int_node(DIVISOR, strlen(DIVISOR), 10);
-    const txc_node *const sol_node = txc_int_create_int_node(DIV_SOL, strlen(DIV_SOL), 10);
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    const struct txc_node *const prod_node = txc_int_create_int_node(gc, DEC_1, strlen(DEC_1), 10);
+    const struct txc_node *const div_node = txc_int_create_int_node(gc, DIVISOR, strlen(DIVISOR), 10);
+    const struct txc_node *const sol_node = txc_int_create_int_node(gc, DIV_SOL, strlen(DIV_SOL), 10);
     if (!txc_node_test_valid(prod_node, true) || !txc_node_test_valid(div_node, true) || !txc_node_test_valid(sol_node, true)) {
         ec = 1;
         goto clean;
@@ -480,6 +493,7 @@ clean:
     txc_int_free(prod);
     txc_node_free(div_node);
     txc_node_free(sol_node);
+    txc_mem_gc_clean(gc);
     return ec;
 }
 
@@ -488,7 +502,8 @@ static int integer_to_str(void)
     if (txc_int_to_str(NULL) != NULL)
         return 1;
     int ec = 0;
-    const txc_node *const large_node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
+    txc_mem_gc *const gc = txc_mem_gc_init();
+    const struct txc_node *const large_node = txc_int_create_int_node(gc, MUL_SOL, strlen(MUL_SOL), 10);
     if (!txc_node_test_valid(large_node, true)) {
         ec = 2;
         goto clean_node;
@@ -525,6 +540,7 @@ clean_zero:
     txc_int_free(zero);
 clean_node:
     txc_node_free(large_node);
+    txc_mem_gc_clean(gc);
     return ec;
 }
 

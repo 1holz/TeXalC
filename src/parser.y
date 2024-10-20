@@ -18,14 +18,17 @@
 %{
     #include <stdio.h>
 
+    #include "util.h"
+
     extern int yylex(void);
-    extern void yyerror(const char *);
+    extern void yyerror(txc_mem_gc *gc, const char *msg);
 %}
 
 %code requires
 {
-    #include "node.h"
     #include "integer.h"
+    #include "node.h"
+    #include "memory.h"
 
     struct pascal_str
     {
@@ -37,8 +40,10 @@
 %union
 {
     struct pascal_str pascal_str;
-    const txc_node *node;
+    const struct txc_node *node;
 }
+
+%parse-param {txc_mem_gc *gc}
 
 %token <pascal_str> BIN_INT DEC_INT HEX_INT
 %left PLUS MINUS
@@ -59,29 +64,30 @@ input:
 
 line:
   END
-| expr END { txc_node_simplify_and_print($1); }
+| expr END { txc_node_simplify_and_print(gc, $1); }
 ;
 
 expr:
   int
-| expr PLUS expr                                 { $$ = txc_node_create_bin_op(TXC_ADD, $1, $3); }
-| expr MINUS expr                                { $$ = txc_node_create_bin_op(TXC_ADD, $1, txc_node_create_un_op(TXC_NEG, $3)); }
-| expr CDOT expr                                 { $$ = txc_node_create_bin_op(TXC_MUL, $1, $3); }
-| FRAC L_BRACE expr R_BRACE L_BRACE expr R_BRACE { $$ = txc_node_create_bin_op(TXC_FRAC, $6, $3); }
+| expr PLUS expr                                 { $$ = txc_node_create_bin_op(gc, TXC_ADD, $1, $3); }
+| expr MINUS expr                                { $$ = txc_node_create_bin_op(gc, TXC_ADD, $1, txc_node_create_un_op(gc, TXC_NEG, $3)); }
+| expr CDOT expr                                 { $$ = txc_node_create_bin_op(gc, TXC_MUL, $1, $3); }
+| FRAC L_BRACE expr R_BRACE L_BRACE expr R_BRACE { $$ = txc_node_create_bin_op(gc, TXC_FRAC, $6, $3); }
 | L_PAREN expr R_PAREN                           { $$ = $2; }
 ;
 
 int:
-  BIN_INT   { $$ = txc_int_create_int_node($1.str, $1.len, 2); }
-| DEC_INT   { $$ = txc_int_create_int_node($1.str, $1.len, 10); }
-| HEX_INT   { $$ = txc_int_create_int_node($1.str, $1.len, 16); }
-| MINUS int { $$ = txc_node_create_un_op(TXC_NEG, $2); }
+  BIN_INT   { $$ = txc_int_create_int_node(gc, $1.str, $1.len, 2); }
+| DEC_INT   { $$ = txc_int_create_int_node(gc, $1.str, $1.len, 10); }
+| HEX_INT   { $$ = txc_int_create_int_node(gc, $1.str, $1.len, 16); }
+| MINUS int { $$ = txc_node_create_un_op(gc, TXC_NEG, $2); }
 | PLUS int  { $$ = $2; }
 ;
 
 %%
 
-void yyerror(char const *s)
+void yyerror(txc_mem_gc *gc, char const *msg)
 {
-    fprintf(stderr, "Parser error: %s\n", s);
+    fprintf(stderr, "Parser error: %s\n", msg);
+    txc_mem_gc_clean(gc);
 }

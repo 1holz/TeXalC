@@ -20,6 +20,8 @@
 
 #include "common.h"
 
+#include <stdbool.h>
+
 #define TXC_ERROR_ALLOC(bytes, purpose) fprintf(stderr, "Allocating %zu bytes of memory failed for %s at %s:%u.\n", bytes, purpose, __FILE__, __LINE__)
 #define TXC_ERROR_INVALID_CHILD_AMOUNT(type, amount) fprintf(stderr, "Node of type %u must not have %zu children at %s:%u.\n", type, amount, __FILE__, __LINE__)
 #define TXC_ERROR_INVALID_NODE_TYPE(type) fprintf(stderr, "Node type %u is invalid at %s:%u.\n", type, __FILE__, __LINE__)
@@ -33,6 +35,39 @@ struct txc_size_t_tuple {
     size_t a;
     size_t b;
 };
+
+struct txc_char_ptr_tuple {
+    char *a;
+    char *b;
+};
+
+typedef struct txc_int txc_int;
+
+enum txc_node_type {
+    TXC_NAN,
+    TXC_INT,
+    TXC_NEG,
+    TXC_ADD,
+    TXC_MUL,
+    TXC_FRAC
+};
+
+// TODO mmissing txc prefix
+union impl {
+    char *reason;
+    struct txc_int *integer;
+};
+
+struct txc_node {
+    union impl impl;
+    size_t children_amount;
+    size_t gc_i;
+    enum txc_node_type type;
+    bool read_only;
+    struct txc_node *children[];
+};
+
+typedef struct txc_mem_gc txc_mem_gc;
 
 extern char *txc_strdup(const char *const str);
 
