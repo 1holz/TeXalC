@@ -65,10 +65,6 @@ extern const txc_node *txc_node_create_un_op(const enum txc_node_type type, cons
 
 extern const txc_node *txc_node_create_bin_op(const enum txc_node_type type, const txc_node *const operand_1, const txc_node *const operand_2);
 
-extern const txc_node *txc_node_copy_read(const txc_node *const from);
-
-extern txc_node *txc_node_copy_write(const txc_node *const from);
-
 extern void txc_node_free(const txc_node *const node);
 
 /* NODE */

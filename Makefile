@@ -67,7 +67,7 @@ $(BUILD)/lexer.o: $(SRC)/lexer.l
 	$(CC) $(CFLAGS) -c $(BUILD)/lexer.c -o $(BUILD)/lexer.o
 
 $(BUILD)/%.o: $(SRC)/%.c
-	$(CC) $(CFLAGS) -c  $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(EXE): $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/texalc.o
 	$(CC) $(CFLAGS) $^ -o $(EXE)

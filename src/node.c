@@ -61,9 +61,9 @@ const struct txc_node TXC_NAN_ERROR_NYI = { .impl.reason = TXC_NAN_REASON_ERROR_
                                             .type = TXC_NAN,
                                             .read_only = true };
 const struct txc_node TXC_NAN_ERROR_OVERFLOW = { .impl.reason = TXC_NAN_REASON_ERROR_OVERFLOW,
-                                            .children_amount = 0,
-                                            .type = TXC_NAN,
-                                            .read_only = true };
+                                                 .children_amount = 0,
+                                                 .type = TXC_NAN,
+                                                 .read_only = true };
 const struct txc_node TXC_NAN_UNSPECIFIED = { .impl.reason = TXC_NAN_REASON_UNSPECIFIED,
                                               .children_amount = 0,
                                               .type = TXC_NAN,
@@ -118,16 +118,57 @@ bool txc_node_test_valid(const struct txc_node *const node, const bool recursive
 
 /* MEMORY */
 
-static const struct txc_node *bake(struct txc_node *const node)
-{
-    assert(txc_node_test_valid(node, true));
-    return node;
-}
-
 const txc_int *txc_node_to_int(const struct txc_node *const node)
 {
     assert(txc_node_test_valid(node, true));
     return node->type == TXC_INT ? node->impl.integer : NULL;
+}
+
+static struct txc_node *copy(const struct txc_node *const from)
+{
+    assert(txc_node_test_valid(from, true));
+    if (from->read_only)
+        return (struct txc_node *)from;
+    struct txc_node *cpy = malloc(sizeof *cpy + sizeof *cpy->children * from->children_amount);
+    if (cpy == NULL) {
+        TXC_ERROR_ALLOC(sizeof *cpy + sizeof *cpy->children * from->children_amount, "copy");
+        return (struct txc_node *)&TXC_NAN_ERROR_ALLOC;
+    }
+    cpy->children_amount = from->children_amount;
+    cpy->type = from->type;
+    cpy->read_only = false;
+    for (size_t i = 0; i < cpy->children_amount; i++)
+        cpy->children[i] = copy(from->children[i]);
+    switch (cpy->type) {
+    case TXC_NAN:
+        cpy->impl.reason = txc_strdup(from->impl.reason);
+        if (cpy->impl.reason == NULL) {
+            TXC_ERROR_ALLOC(strlen(from->impl.reason) + 1, "copy reason");
+            if (cpy->children_amount > 0) {
+                for (size_t i = 0; i < cpy->children_amount; i++)
+                    txc_node_free(cpy->children[i]);
+            }
+            free(cpy);
+            return (struct txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        break;
+    case TXC_INT:
+        cpy->impl.integer = txc_int_copy(from->impl.integer);
+        if (cpy->impl.integer == NULL) {
+            free(cpy);
+            return (struct txc_node *)&TXC_NAN_ERROR_ALLOC;
+        }
+        break;
+    case TXC_NEG: /* FALLTHROUGH */
+    case TXC_ADD: /* FALLTHROUGH */
+    case TXC_MUL: /* FALLTHROUGH */
+    case TXC_FRAC:
+        break;
+    default:
+        TXC_ERROR_INVALID_NODE_TYPE(cpy->type);
+        break;
+    }
+    return cpy;
 }
 
 const struct txc_node *txc_node_create(const struct txc_node *const *const children, const union impl impl, const size_t children_amount, const enum txc_node_type type)
@@ -145,7 +186,7 @@ const struct txc_node *txc_node_create(const struct txc_node *const *const child
     node->read_only = false;
     for (size_t i = 0; i < children_amount; i++)
         node->children[i] = children[i];
-    return bake(node);
+    return node;
 }
 
 const struct txc_node *txc_node_create_nan(const char *const reason)
@@ -166,7 +207,7 @@ const struct txc_node *txc_node_create_nan(const char *const reason)
     nan->children_amount = 0;
     nan->type = TXC_NAN;
     nan->read_only = false;
-    return bake(nan);
+    return nan;
 }
 
 static const struct txc_node *init_op(const enum txc_node_type type, const struct txc_node *const *const children, const size_t children_amount)
@@ -182,8 +223,8 @@ static const struct txc_node *init_op(const enum txc_node_type type, const struc
     node->type = type;
     node->read_only = false;
     for (size_t i = 0; i < children_amount; i++)
-        node->children[i] = txc_node_copy_read(children[i]);
-    return bake(node);
+        node->children[i] = copy(children[i]);
+    return node;
 }
 
 const struct txc_node *txc_node_create_un_op(const enum txc_node_type type, const struct txc_node *const operand)
@@ -209,66 +250,6 @@ const struct txc_node *txc_node_create_bin_op(const enum txc_node_type type, con
     const size_t arity = 2;
     const struct txc_node *const children[] = { operand_1, operand_2 };
     return init_op(type, children, arity);
-}
-
-static struct txc_node *copy(const struct txc_node *const from, const bool write)
-{
-    assert(txc_node_test_valid(from, true));
-    if (from->read_only)
-        return (struct txc_node *)from;
-    struct txc_node *copy = malloc(sizeof *copy + sizeof *copy->children * from->children_amount);
-    if (copy == NULL) {
-        TXC_ERROR_ALLOC(sizeof *copy + sizeof *copy->children * from->children_amount, "copy");
-        return (struct txc_node *)&TXC_NAN_ERROR_ALLOC;
-    }
-    copy->children_amount = from->children_amount;
-    copy->type = from->type;
-    copy->read_only = false;
-        for (size_t i = 0; i < copy->children_amount; i++)
-            copy->children[i] = write ? txc_node_copy_write(from->children[i]) : (struct txc_node *)txc_node_copy_read(from->children[i]);
-    switch (copy->type) {
-    case TXC_NAN:
-        copy->impl.reason = txc_strdup(from->impl.reason);
-        if (copy->impl.reason == NULL) {
-            TXC_ERROR_ALLOC(strlen(from->impl.reason) + 1, "copy reason");
-            if (copy->children_amount > 0) {
-                for (size_t i = 0; i < copy->children_amount; i++)
-                    txc_node_free(copy->children[i]);
-            }
-            free(copy);
-            return (struct txc_node *)&TXC_NAN_ERROR_ALLOC;
-        }
-        break;
-    case TXC_INT:
-        copy->impl.integer = write ? txc_int_copy(from->impl.integer) : (txc_int *)txc_int_copy(from->impl.integer);
-        if (copy->impl.integer == NULL) {
-            free(copy);
-            return (struct txc_node *)&TXC_NAN_ERROR_ALLOC;
-        }
-        break;
-    case TXC_NEG: /* FALLTHROUGH */
-    case TXC_ADD: /* FALLTHROUGH */
-    case TXC_MUL: /* FALLTHROUGH */
-    case TXC_FRAC:
-        break;
-    default:
-        TXC_ERROR_INVALID_NODE_TYPE(copy->type);
-        break;
-    }
-    return copy;
-}
-
-const struct txc_node *txc_node_copy_read(const struct txc_node *const from)
-{
-    // TODO catch read only
-    assert(txc_node_test_valid(from, true));
-    return copy(from, false);
-}
-
-struct txc_node *txc_node_copy_write(const struct txc_node *const from)
-{
-    assert(txc_node_test_valid(from, true));
-    return copy(from, true);
 }
 
 void txc_node_free(const struct txc_node *const node)
@@ -305,108 +286,98 @@ void txc_node_free(const struct txc_node *const node)
 const struct txc_node *txc_node_simplify(const struct txc_node *const node)
 {
     assert(txc_node_test_valid(node, true));
-    struct txc_node *copy = txc_node_copy_write(node);
+    struct txc_node *cpy = copy(node);
     for (size_t i = 0; i < node->children_amount; i++) {
-        txc_node_free(copy->children[i]);
-        copy->children[i] = (struct txc_node *)txc_node_simplify(node->children[i]);
+        txc_node_free(cpy->children[i]);
+        cpy->children[i] = (struct txc_node *)txc_node_simplify(node->children[i]);
         if (node->children[i]->type != TXC_NAN)
             continue;
-        const struct txc_node *const tmp = txc_node_copy_read(copy->children[i]);
-        txc_node_free(copy);
+        const struct txc_node *const tmp = cpy->children[i];
+        cpy->children[i] = NULL;
+        txc_node_free(cpy);
         return tmp;
     }
-    switch (copy->type) {
+    switch (cpy->type) {
     case TXC_NEG:
-        switch (copy->children[0]->type) {
+        switch (cpy->children[0]->type) {
         case TXC_INT: {
             txc_int *const tmp = txc_int_copy(node->children[0]->impl.integer);
-            txc_node_free(copy);
+            txc_node_free(cpy);
             if (tmp == NULL)
                 return &TXC_NAN_ERROR_ALLOC;
             return txc_int_to_node(txc_int_neg(tmp));
         }
         case TXC_NEG: {
-            const struct txc_node *const tmp = txc_node_copy_read(copy->children[0]->children[0]);
-            txc_node_free(copy);
+            const struct txc_node *const tmp = cpy->children[0]->children[0];
+            cpy->children[0]->children[0] = NULL;
+            txc_node_free(cpy);
             return tmp;
         }
         // TODO shift up/down?
         default:
-            return bake(copy);
+            return cpy;
         }
     case TXC_ADD: /* FALLTHROUGH */
     case TXC_MUL: {
-        assert(copy->read_only == false);
+        assert(cpy->read_only == false);
         // TODO handle empty sum/product
-        copy->children_amount = 0;
+        cpy->children_amount = 0;
         for (size_t i = 0; i < node->children_amount; i++) {
-            if (copy->children[i]->type == copy->type)
-                copy->children_amount += node->children[i]->children_amount;
+            if (cpy->children[i]->type == cpy->type)
+                cpy->children_amount += node->children[i]->children_amount;
             else
-                copy->children_amount++;
+                cpy->children_amount++;
         }
         size_t int_i = 0;
         size_t other_i = 0;
-        struct txc_node *int_nodes[copy->children_amount];
-        struct txc_node *other_nodes[copy->children_amount];
-        const struct txc_node *nan = NULL;
-        for (size_t i = 0; i < copy->children_amount; i++) {
-            if (copy->children[i]->type == TXC_INT) {
-                int_nodes[int_i] = copy->children[i];
+        struct txc_node *int_nodes[cpy->children_amount];
+        struct txc_node *other_nodes[cpy->children_amount];
+        for (size_t i = 0; i < cpy->children_amount; i++) {
+            if (cpy->children[i]->type == TXC_INT) {
+                int_nodes[int_i] = cpy->children[i];
                 int_i++;
                 continue;
             }
-            if (copy->children[i]->type != copy->type) {
-                other_nodes[other_i] = copy->children[i];
+            if (cpy->children[i]->type != cpy->type) {
+                other_nodes[other_i] = cpy->children[i];
                 other_i++;
                 continue;
             }
-            for (size_t j = 0; j < copy->children[i]->children_amount; j++) {
-                if (copy->children[i]->type == TXC_INT) {
-                    int_nodes[int_i] = txc_node_copy_write(copy->children[i]);
-                    if (int_nodes[int_i]->type == TXC_NAN && nan == NULL)
-                        nan = txc_node_copy_read(int_nodes[int_i]);
+            for (size_t j = 0; j < cpy->children[i]->children_amount; j++) {
+                if (cpy->children[i]->type == TXC_INT) {
+                    int_nodes[int_i] = cpy->children[i];
+                    cpy->children[i] = NULL;
                     int_i++;
                 } else {
-                    other_nodes[other_i] = txc_node_copy_write(copy->children[i]);
-                    if (other_nodes[other_i]->type == TXC_NAN && nan == NULL)
-                        nan = txc_node_copy_read(other_nodes[other_i]);
+                    other_nodes[other_i] = cpy->children[i];
+                    cpy->children[i] = NULL;
                     other_i++;
                 }
             }
-            txc_node_free(copy->children[i]);
+            txc_node_free(cpy->children[i]);
         }
-        if (nan != NULL) {
-            copy->children_amount = 0;
-            for (size_t i = 0; i < int_i; i++)
-                txc_node_free(int_nodes[i]);
-            for (size_t i = 0; i < other_i; i++)
-                txc_node_free(other_nodes[i]);
-            txc_node_free(copy);
-            return nan;
-        }
-        copy->children_amount = other_i + (int_i > 0 ? 1 : 0);
-        struct txc_node *const tmp = realloc(copy, sizeof *tmp + sizeof *tmp->children * copy->children_amount);
+        cpy->children_amount = other_i + (int_i > 0 ? 1 : 0);
+        struct txc_node *const tmp = realloc(cpy, sizeof *tmp + sizeof *tmp->children * cpy->children_amount);
         if (tmp == NULL) {
-            copy->children_amount = 0;
+            cpy->children_amount = 0;
             for (size_t i = 0; i < int_i; i++)
                 txc_node_free(int_nodes[i]);
             for (size_t i = 0; i < other_i; i++)
                 txc_node_free(other_nodes[i]);
-            TXC_ERROR_ALLOC(sizeof *tmp + sizeof *tmp->children * copy->children_amount, "compact copy");
-            txc_node_free(copy);
+            TXC_ERROR_ALLOC(sizeof *tmp + sizeof *tmp->children * cpy->children_amount, "compact copy");
+            txc_node_free(cpy);
             return &TXC_NAN_ERROR_ALLOC;
         }
-        copy = tmp;
+        cpy = tmp;
         for (size_t i = 0; i < other_i; i++)
-            copy->children[i] = other_nodes[i];
+            cpy->children[i] = other_nodes[i];
         if (int_i == 0)
-            return bake(copy);
+            return cpy;
         const txc_int *ints[int_i];
         for (size_t i = 0; i < int_i; i++)
             ints[i] = txc_node_to_int(int_nodes[i]);
         txc_int *integer;
-        switch (copy->type) {
+        switch (cpy->type) {
         case TXC_ADD:
             integer = txc_int_add(ints, int_i);
             break;
@@ -416,102 +387,105 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
         default:
             for (size_t i = 0; i < int_i; i++)
                 txc_node_free(int_nodes[i]);
-            copy->children_amount--;
-            txc_node_free(copy);
-            TXC_ERROR_INVALID_NODE_TYPE(copy->type);
+            cpy->children_amount--;
+            txc_node_free(cpy);
+            TXC_ERROR_INVALID_NODE_TYPE(cpy->type);
             return &TXC_NAN_ERROR_INVALID_NODE_TYPE;
         }
         for (size_t i = 0; i < int_i; i++)
             txc_node_free(int_nodes[i]);
         const struct txc_node *const int_node = txc_int_to_node(integer);
         if (int_node->type == TXC_NAN) {
-            copy->children_amount--;
-            txc_node_free(copy);
+            cpy->children_amount--;
+            txc_node_free(cpy);
             return &TXC_NAN_ERROR_ALLOC;
         }
-        if (copy->children_amount == 1) {
-            copy->children_amount = 0;
-            txc_node_free(copy);
-            return bake(int_node);
+        if (cpy->children_amount == 1) {
+            cpy->children_amount = 0;
+            txc_node_free(cpy);
+            return int_node;
         }
-        copy->children[copy->children_amount - 1] = (struct txc_node *)int_node;
-        return bake(copy);
+        cpy->children[cpy->children_amount - 1] = (struct txc_node *)int_node;
+        return cpy;
     }
     case TXC_FRAC: {
-        if (copy->children[0]->type == TXC_INT && txc_int_is_zero(copy->children[0]->impl.integer)) {
-            txc_node_free(copy);
+        if (cpy->children[0]->type == TXC_INT && txc_int_is_zero(cpy->children[0]->impl.integer)) {
+            txc_node_free(cpy);
             return &TXC_NAN_ZERO_DIVISION;
         }
         bool neg = false;
-        if ((copy->children[0]->type == TXC_INT && txc_int_is_neg(copy->children[0]->impl.integer)) || copy->children[0]->type == TXC_NEG) {
+        if ((cpy->children[0]->type == TXC_INT && txc_int_is_neg(cpy->children[0]->impl.integer)) || cpy->children[0]->type == TXC_NEG) {
             neg = true;
             const struct txc_node *tmp;
-            if (copy->children[0]->type == TXC_NEG)
-                tmp = txc_node_copy_write(copy->children[0]->children[0]);
-            else
-                tmp = txc_int_to_node(txc_int_neg(txc_int_copy(copy->children[0]->impl.integer)));
-            txc_node_free(copy->children[0]);
-            copy->children[0] = tmp;
-        }
-        if (copy->children_amount == 1) {
-            const struct txc_node *const_copy;
-            if (txc_int_is_pos_one(copy->children[0]->impl.integer)) {
-                const_copy = txc_node_copy_read(copy->children[0]);
-                txc_node_free(copy);
+            if (cpy->children[0]->type == TXC_NEG) {
+                tmp = cpy->children[0]->children[0];
+                cpy->children[0]->children[0] = NULL;
             } else {
-                const_copy = bake(copy);
+                tmp = txc_int_to_node(txc_int_neg(cpy->children[0]->impl.integer));
+                cpy->children[0] = NULL;
+            }
+            txc_node_free(cpy->children[0]);
+            cpy->children[0] = tmp;
+        }
+        if (cpy->children_amount == 1) {
+            const struct txc_node *const_copy;
+            if (txc_int_is_pos_one(cpy->children[0]->impl.integer)) {
+                const_copy = cpy->children[0];
+                cpy->children[0] = NULL;
+                txc_node_free(cpy);
+            } else {
+                const_copy = cpy;
             }
             if (!neg)
-                return bake(copy);
+                return cpy;
             const struct txc_node *const tmp1 = txc_node_create_un_op(TXC_NEG, const_copy);
             txc_node_free(const_copy);
             const struct txc_node *const tmp2 = txc_node_simplify(tmp1);
             txc_node_free(tmp1);
             return tmp2;
         }
-        if ((copy->children[1]->type == TXC_INT && txc_int_is_neg(copy->children[1]->impl.integer)) || copy->children[1]->type == TXC_NEG) {
+        if ((cpy->children[1]->type == TXC_INT && txc_int_is_neg(cpy->children[1]->impl.integer)) || cpy->children[1]->type == TXC_NEG) {
             neg = !neg;
             const struct txc_node *tmp;
-            if (copy->children[1]->type == TXC_NEG)
-                tmp = txc_node_copy_write(copy->children[1]->children[0]);
-            else
-                tmp = txc_int_to_node(txc_int_neg(txc_int_copy(copy->children[1]->impl.integer)));
-            txc_node_free(copy->children[1]);
-            copy->children[1] = tmp;
+            if (cpy->children[1]->type == TXC_NEG) {
+                tmp = cpy->children[1]->children[0];cpy->children[1]->children[0]=NULL;
+            }else{
+                tmp = txc_int_to_node(txc_int_neg(txc_int_copy(cpy->children[1]->impl.integer)));
+            }txc_node_free(cpy->children[1]);
+            cpy->children[1] = tmp;
         }
-        if (copy->children[0]->type == TXC_INT && txc_int_is_pos_one(copy->children[0]->impl.integer)) {
-            const struct txc_node *tmp_1 = txc_node_copy_read(copy->children[1]);
-            txc_node_free(copy);
-            if (neg) {
-                const struct txc_node *const tmp_2 = txc_node_create_un_op(TXC_NEG, txc_node_copy_read(tmp_1));
-                txc_node_free(tmp_1);
-                tmp_1 = tmp_2;
-            }
+        if (cpy->children[0]->type == TXC_INT && txc_int_is_pos_one(cpy->children[0]->impl.integer)) {
+            const struct txc_node *tmp_1 = cpy->children[1];cpy->children[1]=NULL;
+            txc_node_free(cpy);
+            if (neg)
+                tmp_1 = txc_node_create_un_op(TXC_NEG, tmp_1);
             return txc_node_simplify(tmp_1);
         }
         // TODO switch if frac
-        if (copy->children[0]->type == TXC_NAN || copy->children[1]->type == TXC_NAN) {
-            const struct txc_node *const tmp = txc_node_copy_read(copy->children[copy->children[0]->type == TXC_NAN ? 0 : 1]);
-            txc_node_free(copy);
+        if (cpy->children[0]->type == TXC_NAN || cpy->children[1]->type == TXC_NAN) {
+            uint_fast8_t i = cpy->children[0]->type == TXC_NAN ? 0 : 1;
+            const struct txc_node *const tmp = cpy->children[i];
+            cpy->children[i] = NULL;
+            txc_node_free(cpy);
             return tmp;
         }
         const txc_int *num = NULL;
         const txc_int *den = NULL;
-        if (copy->children[0]->type == TXC_INT)
-            den = txc_int_copy(copy->children[0]->impl.integer);
-        else if (copy->children[0]->type == TXC_MUL && copy->children[0]->children[copy->children[0]->children_amount - 1]->type == TXC_INT)
-            den = txc_int_copy(copy->children[0]->children[copy->children[0]->children_amount - 1]->impl.integer);
-        if (copy->children[1]->type == TXC_INT)
-            num = txc_int_copy(copy->children[1]->impl.integer);
-        else if (copy->children[1]->type == TXC_MUL && copy->children[1]->children[copy->children[1]->children_amount - 1]->type == TXC_INT)
-            num = txc_int_copy(copy->children[1]->children[copy->children[1]->children_amount - 1]->impl.integer);
+        if (cpy->children[0]->type == TXC_INT)
+            den = txc_int_copy(cpy->children[0]->impl.integer);
+        else if (cpy->children[0]->type == TXC_MUL && cpy->children[0]->children[cpy->children[0]->children_amount - 1]->type == TXC_INT)
+            den = txc_int_copy(cpy->children[0]->children[cpy->children[0]->children_amount - 1]->impl.integer);
+        if (cpy->children[1]->type == TXC_INT)
+            num = txc_int_copy(cpy->children[1]->impl.integer);
+        else if (cpy->children[1]->type == TXC_MUL && cpy->children[1]->children[cpy->children[1]->children_amount - 1]->type == TXC_INT)
+            num = txc_int_copy(cpy->children[1]->children[cpy->children[1]->children_amount - 1]->impl.integer);
         const txc_int *const gcd = txc_int_gcd(num, den);
         const struct txc_node *const num_node = txc_int_to_node(txc_int_div(num, gcd));
         if (num_node->type == TXC_NAN) {
             txc_int_free(num);
             txc_int_free(den);
             txc_int_free(gcd);
-            txc_node_free(copy);
+            txc_node_free(cpy);
             return &TXC_NAN_ERROR_ALLOC;
         }
         txc_int_free(num);
@@ -520,69 +494,66 @@ const struct txc_node *txc_node_simplify(const struct txc_node *const node)
             txc_int_free(den);
             txc_int_free(gcd);
             txc_node_free(num_node);
-            txc_node_free(copy);
+            txc_node_free(cpy);
             return &TXC_NAN_ERROR_ALLOC;
         }
         txc_int_free(den);
         txc_int_free(gcd);
-        if (copy->children[0]->type == TXC_INT) {
-            txc_node_free(copy->children[0]);
-            copy->children[0] = den_node;
+        if (cpy->children[0]->type == TXC_INT) {
+            txc_node_free(cpy->children[0]);
+            cpy->children[0] = den_node;
         } else {
-            txc_node_free(copy->children[0]->children[copy->children[0]->children_amount - 1]);
-            copy->children[0]->children[copy->children[0]->children_amount - 1] = den_node;
-            copy->children[0] = txc_node_simplify(copy->children[0]);
-            if (copy->children[0]->type == TXC_NAN) {
-                const struct txc_node *const tmp = txc_node_copy_read(copy->children[0]);
-                txc_node_free(copy);
+            txc_node_free(cpy->children[0]->children[cpy->children[0]->children_amount - 1]);
+            cpy->children[0]->children[cpy->children[0]->children_amount - 1] = den_node;
+            cpy->children[0] = txc_node_simplify(cpy->children[0]);
+            if (cpy->children[0]->type == TXC_NAN) {
+                const struct txc_node *const tmp = cpy->children[0];cpy->children[0]=NULL;
+                txc_node_free(cpy);
                 return tmp;
             }
         }
-        if (copy->children[1]->type == TXC_INT) {
-            txc_node_free(copy->children[1]);
-            copy->children[1] = num_node;
+        if (cpy->children[1]->type == TXC_INT) {
+            txc_node_free(cpy->children[1]);
+            cpy->children[1] = num_node;
         } else {
-            txc_node_free(copy->children[1]->children[copy->children[1]->children_amount - 1]);
-            copy->children[1]->children[copy->children[1]->children_amount - 1] = num_node;
-            copy->children[1] = txc_node_simplify(copy->children[1]);
-            if (copy->children[1]->type == TXC_NAN) {
-                const struct txc_node *const tmp = txc_node_copy_read(copy->children[1]);
-                txc_node_free(copy);
+            txc_node_free(cpy->children[1]->children[cpy->children[1]->children_amount - 1]);
+            cpy->children[1]->children[cpy->children[1]->children_amount - 1] = num_node;
+            cpy->children[1] = txc_node_simplify(cpy->children[1]);
+            if (cpy->children[1]->type == TXC_NAN) {
+                const struct txc_node *const tmp = cpy->children[1];cpy->children[1]=NULL;
+                txc_node_free(cpy);
                 return tmp;
             }
         }
-        if (copy->children[0]->type == TXC_INT && txc_int_is_pos_one(copy->children[0]->impl.integer)) {
-            const struct txc_node *tmp_1 = txc_node_copy_read(copy->children[1]);
-            txc_node_free(copy);
-            if (neg) {
-                const struct txc_node *const tmp_2 = txc_node_create_un_op(TXC_NEG, txc_node_copy_read(tmp_1));
-                txc_node_free(tmp_1);
-                tmp_1 = txc_node_simplify(tmp_2);
-            }
-            return tmp_1;
-        }
-        if (copy->children[1]->type == TXC_INT && txc_int_is_pos_one(copy->children[1]->impl.integer)) {
-            txc_node_free(copy->children[1]);
-            copy->children_amount = 1;
-            struct txc_node *tmp = realloc(copy, sizeof *copy + sizeof *copy->children * 1);
-            if (tmp == NULL) {
-                TXC_ERROR_ALLOC(sizeof *copy + sizeof *copy->children * 1, "unit fraction");
-                txc_node_free(copy);
-                return &TXC_NAN_ERROR_ALLOC;
-            }
-            copy = tmp;
-        }
-        if (neg) {
-            const struct txc_node *const tmp = txc_node_create_un_op(TXC_NEG, copy);
-            txc_node_free(copy);
+        if (cpy->children[0]->type == TXC_INT && txc_int_is_pos_one(cpy->children[0]->impl.integer)) {
+            const struct txc_node *tmp = cpy->children[1];cpy->children[1]=NULL;
+            txc_node_free(cpy);
+            if (neg)
+                tmp = txc_node_simplify(txc_node_create_un_op(TXC_NEG, tmp));
             return tmp;
         }
-        return bake(copy);
+        if (cpy->children[1]->type == TXC_INT && txc_int_is_pos_one(cpy->children[1]->impl.integer)) {
+            txc_node_free(cpy->children[1]);
+            cpy->children_amount = 1;
+            struct txc_node *tmp = realloc(cpy, sizeof *cpy + sizeof *cpy->children * 1);
+            if (tmp == NULL) {
+                TXC_ERROR_ALLOC(sizeof *cpy + sizeof *cpy->children * 1, "unit fraction");
+                txc_node_free(cpy);
+                return &TXC_NAN_ERROR_ALLOC;
+            }
+            cpy = tmp;
+        }
+        if (neg) {
+            const struct txc_node *const tmp = txc_node_create_un_op(TXC_NEG, cpy);
+            txc_node_free(cpy);
+            return tmp;
+        }
+        return cpy;
     }
     case TXC_NAN: /* FALLTHROUGH */
     case TXC_INT: /* FALLTHROUGH */
     default:
-        return bake(copy);
+        return cpy;
     }
 }
 

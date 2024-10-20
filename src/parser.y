@@ -24,8 +24,8 @@
 
 %code requires
 {
-    #include "node.h"
     #include "integer.h"
+    #include "node.h"
 
     struct pascal_str
     {
