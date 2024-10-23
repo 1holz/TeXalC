@@ -37,7 +37,7 @@
 %union
 {
     struct pascal_str pascal_str;
-    const txc_node *node;
+    txc_node *node;
 }
 
 %token <pascal_str> BIN_INT DEC_INT HEX_INT

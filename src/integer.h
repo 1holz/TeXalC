@@ -36,9 +36,9 @@ extern bool txc_int_test_valid(const txc_int *const integer);
 
 /* MEMORY */
 
-extern const txc_node *txc_int_to_node(const txc_int *const integer);
+extern txc_node *txc_int_to_node(txc_int *const integer);
 
-extern const txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base);
+extern txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base);
 
 extern txc_int *txc_int_create_zero(void);
 

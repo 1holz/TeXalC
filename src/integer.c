@@ -71,10 +71,10 @@ bool txc_int_test_valid(const struct txc_int *const integer)
 
 /* MEMORY */
 
-const txc_node *txc_int_to_node(const struct txc_int *const integer)
+txc_node *txc_int_to_node(struct txc_int *const integer)
 {
     if (integer == NULL)
-        return &TXC_NAN_ERROR_ALLOC; // TODO other causes for NULL?
+        return (txc_node *)&TXC_NAN_ERROR_ALLOC; // TODO other causes for NULL?
     assert(txc_int_test_valid(integer));
     union impl impl;
     impl.integer = (struct txc_int *)integer;
@@ -230,11 +230,11 @@ static struct txc_int *from_hex_str(struct txc_int *const integer, const char *c
     return integer;
 }
 
-const struct txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base)
+txc_node *txc_int_create_int_node(const char *const str, size_t len, const uint_fast8_t base)
 {
     if (base != 2 && base != 10 && base != 16) {
         TXC_ERROR_NYI("Bases other than 2, 10 or 16");
-        return &TXC_NAN_ERROR_NYI;
+        return (txc_node *)&TXC_NAN_ERROR_NYI;
     }
     const char *cur = str;
     size_t width = 4;
