@@ -23,10 +23,15 @@
 
 #include "integer.h"
 #include "node.h"
+#include "parser.h"
 
 #define TEST(test)                        \
     else if (strcmp(argv[1], #test) == 0) \
         ec = test();
+
+#ifndef TXC_BUF_SIZE
+#define TXC_BUF_SIZE 1024
+#endif /* TXC_BUF_SIZE */
 
 #define ZERO "0"
 #define TWO "2"
@@ -44,8 +49,12 @@
 #define UNSIGNED_ADD_SOL "55555556111111116666666722222222777777783333333388888889444444449999999687636403023875331261762550090528401497170926036463573380930435189509401934386407209315875190270712441579691059746097616155038486139411016894660518366725762392"
 #define SIGNED_ADD_SOL "11111111222222223333333344444444555555556666666677777777888888889999999895894228432287293388506727316378868799631934918954323291964257619084693954932638000675873187263480170109800023662907847404519880476082940100232147322492776286"
 #define MUL_SOL "169350886551847025351832376500990702638926992872021541990550229385764480666443954620727122692539576421015350243734673536666653866729396898201004310585209594435286810069303568709210557326982963130851676763413581558443578795873115592910919779691911148276175667700944954397952321203102794641797091078746751182609160188237766491908753577450918900539229077851525582987958024530931747900325877049613035287995732265235660054809402532628592977406438503340547869801425036332338671990845012323610950305038127153995675360977548949584684778565074291984307606257594500433108529378185427348210348209590545241596666550329727911125652169401277956953386881018821711265407436265166815012041919282718363116717271448004304277408276100601462379515523612833354978056982494621003257578343632488899292157630632065255366196500859562680381003219723172796429522542662261391408826326384256351949283574595399553665260238357077597088374941062575920265619201357183467154234763614992374494943445825977845487436176364888647334729213371656976047160709297372472531171578789649078543127709608878474182093837204987832901201341261802484118524255098304545934285828335006845456312037640"
+#define NEG_MUL_SOL "(-169350886551847025351832376500990702638926992872021541990550229385764480666443954620727122692539576421015350243734673536666653866729396898201004310585209594435286810069303568709210557326982963130851676763413581558443578795873115592910919779691911148276175667700944954397952321203102794641797091078746751182609160188237766491908753577450918900539229077851525582987958024530931747900325877049613035287995732265235660054809402532628592977406438503340547869801425036332338671990845012323610950305038127153995675360977548949584684778565074291984307606257594500433108529378185427348210348209590545241596666550329727911125652169401277956953386881018821711265407436265166815012041919282718363116717271448004304277408276100601462379515523612833354978056982494621003257578343632488899292157630632065255366196500859562680381003219723172796429522542662261391408826326384256351949283574595399553665260238357077597088374941062575920265619201357183467154234763614992374494943445825977845487436176364888647334729213371656976047160709297372472531171578789649078543127709608878474182093837204987832901201341261802484118524255098304545934285828335006845456312037640)"
 #define DIVISOR "2688811131697455799312686635590409314476653708480527751110523555767208122010442771791153338445280213913034380290994023971"
 #define DIV_SOL "4591501"
+#define REASON_DUMMY "dummy reason"
+#define NAN_UNSPECIFIED "\\text{NAN(unspecified)}"
+#define NAN_DUMMY "\\text{NAN(dummy reason)}"
 
 /* DEFINITIONS */
 
@@ -118,7 +127,7 @@ static int integer_copy(void)
     if (txc_int_copy(NULL) != NULL)
         return 1;
     int ec = 0;
-    const txc_node *const node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
+    txc_node *const node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
     if (!txc_node_test_valid(node, true)) {
         ec = 2;
         goto clean_node_only;
@@ -152,7 +161,7 @@ clean_node_only:
     return ec;
 }
 
-static int integer_create(const txc_node *a, const txc_node *b)
+static int integer_create(txc_node *a, txc_node *b)
 {
     if (txc_int_neg(NULL) != NULL)
         return 1;
@@ -236,14 +245,14 @@ static int integer_create_hex(void)
         txc_int_create_int_node(HEX_2, 218, 16));
 }
 
-static int integer_add_mul(const enum op op, const char *const operand_strs[5], const char *const solution_str)
+static int integer_add_mul(const enum op op, const char *const operand_strs[5], const char *const sol_str)
 {
     if (txc_int_neg(NULL) != NULL)
         return 1;
     const bool neg = op == SIGNED_ADD || op == SIGNED_MUL;
     const bool mul = op == UNSIGNED_MUL || op == SIGNED_MUL;
     int ec = 0;
-    const txc_node *const operand_nodes[5] = {
+    txc_node *const operand_nodes[5] = {
         txc_int_create_int_node(operand_strs[0], strlen(operand_strs[0]), 10),
         txc_int_create_int_node(operand_strs[1], strlen(operand_strs[1]), 10),
         txc_int_create_int_node(operand_strs[2], strlen(operand_strs[2]), 10),
@@ -269,12 +278,12 @@ static int integer_add_mul(const enum op op, const char *const operand_strs[5], 
         ec = 3;
         goto clean;
     }
-    const txc_node *const solution_node = txc_int_create_int_node(solution_str, strlen(solution_str), 10);
-    if (!txc_node_test_valid(solution_node, true)) {
+    txc_node *const sol_node = txc_int_create_int_node(sol_str, strlen(sol_str), 10);
+    if (!txc_node_test_valid(sol_node, true)) {
         ec = 4;
         goto clean;
     }
-    const txc_int *const solution = neg ? txc_int_neg((txc_int *)txc_node_to_int(solution_node)) : txc_node_to_int(solution_node);
+    const txc_int *const solution = neg ? txc_int_neg((txc_int *)txc_node_to_int(sol_node)) : txc_node_to_int(sol_node);
     if (!txc_int_test_valid(solution)) {
         ec = 5;
         goto clean;
@@ -312,7 +321,7 @@ static int integer_add_mul(const enum op op, const char *const operand_strs[5], 
 clean_result:
     txc_int_free(result);
 clean:
-    txc_node_free(solution_node);
+    txc_node_free(sol_node);
     for (size_t i = 0; i < 5; i++)
         txc_node_free(operand_nodes[i]);
     return ec;
@@ -357,10 +366,10 @@ static int integer_gcd(void)
     if (txc_int_mul(NULL, 1) != NULL)
         return 2;
     int ec = 0;
-    const txc_node *const gcd_node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
-    const txc_node *const two_node = txc_int_create_int_node(TWO, strlen(TWO), 10);
-    const txc_node *const a_node = txc_int_create_int_node(UNSIGNED_ADD_SOL, strlen(UNSIGNED_ADD_SOL), 10);
-    const txc_node *const b_node = txc_int_create_int_node(SIGNED_ADD_SOL, strlen(SIGNED_ADD_SOL), 10);
+    txc_node *const gcd_node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
+    txc_node *const two_node = txc_int_create_int_node(TWO, strlen(TWO), 10);
+    txc_node *const a_node = txc_int_create_int_node(UNSIGNED_ADD_SOL, strlen(UNSIGNED_ADD_SOL), 10);
+    txc_node *const b_node = txc_int_create_int_node(SIGNED_ADD_SOL, strlen(SIGNED_ADD_SOL), 10);
     if (!txc_node_test_valid(gcd_node, true) || !txc_node_test_valid(a_node, true) || !txc_node_test_valid(b_node, true)) {
         ec = 3;
         goto clean_nodes;
@@ -444,9 +453,9 @@ clean:
 static int integer_div(void)
 {
     int ec = 0;
-    const txc_node *const prod_node = txc_int_create_int_node(DEC_1, strlen(DEC_1), 10);
-    const txc_node *const div_node = txc_int_create_int_node(DIVISOR, strlen(DIVISOR), 10);
-    const txc_node *const sol_node = txc_int_create_int_node(DIV_SOL, strlen(DIV_SOL), 10);
+    txc_node *const prod_node = txc_int_create_int_node(DEC_1, strlen(DEC_1), 10);
+    txc_node *const div_node = txc_int_create_int_node(DIVISOR, strlen(DIVISOR), 10);
+    txc_node *const sol_node = txc_int_create_int_node(DIV_SOL, strlen(DIV_SOL), 10);
     if (!txc_node_test_valid(prod_node, true) || !txc_node_test_valid(div_node, true) || !txc_node_test_valid(sol_node, true)) {
         ec = 1;
         goto clean;
@@ -488,7 +497,7 @@ static int integer_to_str(void)
     if (txc_int_to_str(NULL) != NULL)
         return 1;
     int ec = 0;
-    const txc_node *const large_node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
+    txc_node *const large_node = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
     if (!txc_node_test_valid(large_node, true)) {
         ec = 2;
         goto clean_node;
@@ -528,6 +537,252 @@ clean_node:
     return ec;
 }
 
+/* NODE */
+
+static int node_constants(void)
+{
+    txc_node_free(&TXC_NAN_ERROR_ALLOC);
+    txc_node_free(&TXC_NAN_ERROR_INVALID_NODE_TYPE);
+    txc_node_free(&TXC_NAN_ERROR_OVERFLOW);
+    txc_node_free(&TXC_NAN_ERROR_NYI);
+    txc_node_free(&TXC_NAN_ERROR_ZERO_DIVISION);
+    txc_node_free(&TXC_NAN_UNSPECIFIED);
+    if (!txc_node_test_valid(&TXC_NAN_ERROR_ALLOC, true))
+        return 1;
+    if (!txc_node_test_valid(&TXC_NAN_ERROR_INVALID_NODE_TYPE, true))
+        return 2;
+    if (!txc_node_test_valid(&TXC_NAN_ERROR_OVERFLOW, true))
+        return 3;
+    if (!txc_node_test_valid(&TXC_NAN_ERROR_NYI, true))
+        return 4;
+    if (!txc_node_test_valid(&TXC_NAN_ERROR_ZERO_DIVISION, true))
+        return 5;
+    if (!txc_node_test_valid(&TXC_NAN_UNSPECIFIED, true))
+        return 6;
+    return 0;
+}
+
+static int node_create_nan(void)
+{
+    const txc_node *const unspecified = txc_node_create_nan(NULL);
+    const txc_node *const dummy = txc_node_create_nan(REASON_DUMMY);
+    if (!txc_node_test_valid(unspecified, true) || !txc_node_test_valid(dummy, true))
+        return 1;
+    char *const unspecified_str = txc_node_to_str(unspecified);
+    char *const dummy_str = txc_node_to_str(dummy);
+    if (strcmp(unspecified_str, NAN_UNSPECIFIED) != 0)
+        return 2;
+    if (strcmp(dummy_str, NAN_DUMMY) != 0)
+        return 3;
+    txc_node_free(unspecified);
+    txc_node_free(dummy);
+    free(unspecified_str);
+    free(dummy_str);
+    return 0;
+}
+
+static int node_neg(void)
+{
+    txc_node *const node_int = txc_int_create_int_node(MUL_SOL, strlen(MUL_SOL), 10);
+    txc_node *const node_neg = txc_node_create_un_op(TXC_NEG, node_int);
+    if (!txc_node_test_valid(node_int, true) || !txc_node_test_valid(node_neg, true))
+        return 1;
+    txc_node *const node_res = txc_node_simplify(node_neg);
+    txc_node_free(node_neg);
+    if (!txc_node_test_valid(node_res, true))
+        return 2;
+    char *const str = txc_node_to_str(node_res);
+    if (strcmp(str, NEG_MUL_SOL) != 0)
+        return 3;
+    free(str);
+    if (!txc_int_is_neg(txc_node_to_int(node_res)))
+        return 4;
+    txc_node_free(node_res);
+    return 0;
+}
+
+static int node_add_mul(const enum op op, const char *const operand_strs[5], const char *const sol_str)
+{
+    if (txc_int_neg(NULL) != NULL)
+        return 1;
+    const bool neg = op == SIGNED_ADD || op == SIGNED_MUL;
+    const enum txc_node_type type = op == UNSIGNED_MUL || op == SIGNED_MUL ? TXC_MUL : TXC_ADD;
+    txc_node *op_nodes[5] = {
+        txc_int_create_int_node(operand_strs[0], strlen(operand_strs[0]), 10),
+        txc_int_create_int_node(operand_strs[1], strlen(operand_strs[1]), 10),
+        txc_int_create_int_node(operand_strs[2], strlen(operand_strs[2]), 10),
+        txc_int_create_int_node(operand_strs[3], strlen(operand_strs[3]), 10),
+        txc_int_create_int_node(operand_strs[4], strlen(operand_strs[4]), 10)
+    };
+    for (size_t i = 0; i < 5; i++) {
+        if (!txc_node_test_valid(op_nodes[i], true))
+            return 2;
+    }
+    if (neg) {
+        op_nodes[0] = txc_node_create_un_op(TXC_NEG, op_nodes[0]);
+        op_nodes[2] = txc_node_create_un_op(TXC_NEG, op_nodes[2]);
+        op_nodes[4] = txc_node_create_un_op(TXC_NEG, op_nodes[4]);
+    }
+    op_nodes[1] = txc_node_create_bin_op(type, op_nodes[0], op_nodes[1]);
+    op_nodes[3] = txc_node_create_bin_op(type, op_nodes[3], op_nodes[4]);
+    op_nodes[2] = txc_node_create_bin_op(type, op_nodes[2], op_nodes[3]);
+    op_nodes[1] = txc_node_create_bin_op(type, op_nodes[1], op_nodes[2]);
+    const txc_node *const result = txc_node_simplify(op_nodes[1]);
+    if (!txc_node_test_valid(result, true))
+        return 3;
+    char *str = txc_node_to_str(result);
+    txc_node_free(op_nodes[1]);
+    txc_node_free(result);
+    const bool true_neg = neg && strcmp(ZERO, sol_str) != 0;
+    const char *const test_str = true_neg ? str + 2 : str;
+    if (strncmp(test_str, sol_str, strlen(sol_str)) != 0) {
+        fprintf(stderr, true_neg ? "Got:\n%s\nExpected:\n(-%s)\n" : "Got:\n%s\nExpected:\n%s\n", str, DIV_SOL);
+        return 4;
+    }
+    free(str);
+    return 0;
+}
+
+static int node_unsigned_add(void)
+{
+    const char *const operands_node[5] = { LONG_1, LONG_2, LONG_3, LONG_4, LONG_5 };
+    return node_add_mul(UNSIGNED_ADD, operands_node, UNSIGNED_ADD_SOL);
+}
+
+static int node_signed_add(void)
+{
+    const char *const operands_node[5] = { LONG_1, LONG_2, LONG_3, LONG_4, LONG_5 };
+    return node_add_mul(SIGNED_ADD, operands_node, SIGNED_ADD_SOL);
+}
+
+static int node_unsigned_mul(void)
+{
+    const char *const operands_node_1[5] = { LONG_1, LONG_2, LONG_3, LONG_4, LONG_5 };
+    const int ec = node_add_mul(UNSIGNED_MUL, operands_node_1, MUL_SOL);
+    if (ec != 0)
+        return ec;
+    const char *const operands_node_2[5] = { MUL_SOL, LONG_2, LONG_3, ZERO, LONG_5 };
+    return node_add_mul(UNSIGNED_MUL, operands_node_2, ZERO);
+}
+
+static int node_signed_mul(void)
+{
+    const char *const operands_node_1[5] = { LONG_1, LONG_2, LONG_3, LONG_4, LONG_5 };
+    const int ec = node_add_mul(SIGNED_MUL, operands_node_1, MUL_SOL);
+    if (ec != 0)
+        return ec;
+    const char *const operands_node_2[5] = { MUL_SOL, LONG_2, LONG_3, ZERO, LONG_5 };
+    return node_add_mul(SIGNED_MUL, operands_node_2, ZERO);
+}
+
+static int node_frac_int(bool inv)
+{
+    txc_node *const prod_node = txc_int_create_int_node(DEC_1, strlen(DEC_1), 10);
+    txc_node *const div_node = txc_int_create_int_node(DIVISOR, strlen(DIVISOR), 10);
+    if (!txc_node_test_valid(prod_node, true) || !txc_node_test_valid(div_node, true))
+        return 1;
+    txc_node *const frac = txc_node_create_bin_op(TXC_FRAC, inv ? prod_node : div_node, inv ? div_node : prod_node);
+    if (!txc_node_test_valid(frac, true))
+        return 2;
+    txc_node *const result = txc_node_simplify(frac);
+    char *const str = txc_node_to_str(result);
+    txc_node_free(frac);
+    txc_node_free(result);
+    const char *const test_str = inv ? str + 9 : str;
+    if (strncmp(test_str, DIV_SOL, strlen(DIV_SOL)) != 0) {
+        fprintf(stderr, inv ? "Got:\n%s\nExpected:\n\\frac{1}{%s}\n" : "Got:\n%s\nExpected:\n%s\n", str, DIV_SOL);
+        return 3;
+    }
+    free(str);
+    return 0;
+}
+
+static int node_frac_int_normal(void)
+{
+    return node_frac_int(false);
+}
+
+static int node_frac_int_inverted(void)
+{
+    return node_frac_int(true);
+}
+
+static int parser(const char *const input, const char *const expected)
+{
+    const int old_stdin = dup(STDIN_FILENO);
+    const int old_stdout = dup(STDOUT_FILENO);
+    if (old_stdin < 0 || old_stdout < 0)
+        return 1;
+    int i_fd[2];
+    int o_fd[2];
+    const int i_pipe_res = pipe(i_fd);
+    const int o_pipe_res = pipe(o_fd);
+    if (i_pipe_res != 0 || o_pipe_res != 0) {
+        fprintf(stderr, "Opening pipes failed. In: %d Out: %d\n", i_pipe_res, o_pipe_res);
+        return 2;
+    }
+    const int i_dup_res = dup2(i_fd[0], STDIN_FILENO);
+    const int o_dup_res = dup2(o_fd[1], STDOUT_FILENO);
+    const int i0_close_res = close(i_fd[0]);
+    const int o1_close_res = close(o_fd[1]);
+    if (i_dup_res < 0 || o_dup_res < 0 || i0_close_res != 0 || o1_close_res != 0) {
+        dup2(old_stdin, STDIN_FILENO);
+        dup2(old_stdout, STDOUT_FILENO);
+        return 3;
+    }
+    ssize_t write_successful = write(i_fd[1], input, strlen(input));
+    if (write_successful < 0) {
+        dup2(old_stdin, STDIN_FILENO);
+        dup2(old_stdout, STDOUT_FILENO);
+        perror(NULL);
+        return 4;
+    }
+    const int i1_close_res = close(i_fd[1]);
+    yyparse();
+    const int in_flush_result = fflush(stdin);
+    const int out_flush_result = fflush(stdout);
+    if (in_flush_result != 0 || out_flush_result != 0) {
+        dup2(old_stdin, STDIN_FILENO);
+        dup2(old_stdout, STDOUT_FILENO);
+        perror(NULL);
+        return 5;
+    }
+    const int in_close_res = close(STDIN_FILENO);
+    const int out_close_res = close(STDOUT_FILENO);
+    ssize_t old_read_successful = 0;
+    ssize_t read_successful = 0;
+    size_t to_read = TXC_BUF_SIZE > strlen(expected) ? TXC_BUF_SIZE : strlen(expected);
+    char buf[to_read + 1];
+    read_successful = read(o_fd[0], buf, to_read);
+    while (read_successful > 0) {
+        old_read_successful = read_successful;
+        read_successful = read(o_fd[0], buf, to_read);
+    }
+    buf[old_read_successful] = 0;
+    if (read_successful < 0) {
+        dup2(old_stdin, STDIN_FILENO);
+        dup2(old_stdout, STDOUT_FILENO);
+        perror(NULL);
+        return 6;
+    }
+    const int o0_close_res = close(o_fd[0]);
+    const int i_reset_res = dup2(old_stdin, STDIN_FILENO);
+    const int o_reset_res = dup2(old_stdout, STDOUT_FILENO);
+    if (i1_close_res != 0 || o0_close_res != 0 || in_close_res != 0 || out_close_res != 0 || i_reset_res < 0 || o_reset_res < 0)
+        return 7;
+    const char *const got_start = buf + old_read_successful - strlen(expected) < buf ? buf : buf + old_read_successful - strlen(expected);
+    if (strncmp(got_start, expected, strlen(expected)) != 0) {
+        fprintf(stderr, "Got:\n%s\nExpected:\n%s\n", got_start, expected);
+        return 8;
+    }
+    return 0;
+}
+
+static int node_combined(void)
+{
+    return parser("\\frac{0x80 \\cdot 0B10 - 200 + 5 \\cdot 5}{(8 - 2 - 2) \\cdot (5 - 8)} \\\\", "= (-\\frac{27}{4}) \\\\\n");
+}
+
 /* MAIN */
 
 int main(int argc, char **argv)
@@ -553,6 +808,16 @@ int main(int argc, char **argv)
     TEST(integer_div_invalid)
     TEST(integer_div)
     TEST(integer_to_str)
+    TEST(node_constants)
+    TEST(node_create_nan)
+    TEST(node_neg)
+    TEST(node_unsigned_add)
+    TEST(node_signed_add)
+    TEST(node_unsigned_mul)
+    TEST(node_signed_mul)
+    TEST(node_frac_int_normal)
+    TEST(node_frac_int_inverted)
+    TEST(node_combined)
     else
     {
         fprintf(stderr, "No test with name %s exists.\n", argv[1]);

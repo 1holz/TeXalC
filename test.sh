@@ -93,6 +93,56 @@ if ./texalc-test integer_to_str; then
 else
     ((fails++));
 fi;
+if ./texalc-test node_constants; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_create_nan; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_neg; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_unsigned_add; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_signed_add; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_unsigned_mul; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_signed_mul; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_frac_int_normal; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_frac_int_inverted; then
+    ((passes++));
+else
+    ((fails++));
+fi;
+if ./texalc-test node_combined; then
+    ((passes++));
+else
+    ((fails++));
+fi;
 echo =========;
 printf "TOTAL: %2d\n" $((passes + fails));
 printf "PASS:  %2d\n" $((passes));
