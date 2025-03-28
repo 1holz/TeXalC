@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 
 #include "integer.h"
 #include "node.h"
@@ -458,7 +459,7 @@ static int integer_div(void)
     txc_node *const sol_node = txc_int_create_int_node(DIV_SOL, strlen(DIV_SOL), 10);
     if (!txc_node_test_valid(prod_node, true) || !txc_node_test_valid(div_node, true) || !txc_node_test_valid(sol_node, true)) {
         ec = 1;
-        goto clean;
+        goto clean_input;
     }
     const txc_int *prod = txc_node_to_int(prod_node);
     const txc_int *const div = txc_node_to_int(div_node);
@@ -487,6 +488,7 @@ static int integer_div(void)
     }
 clean:
     txc_int_free(prod);
+clean_input:
     txc_node_free(div_node);
     txc_node_free(sol_node);
     return ec;
@@ -707,7 +709,7 @@ static int node_frac_int_inverted(void)
     return node_frac_int(true);
 }
 
-static int parser(const char *const input, const char *const expected)
+static int parser_old(const char *const input, const char *const expected)
 {
     const int old_stdin = dup(STDIN_FILENO);
     const int old_stdout = dup(STDOUT_FILENO);
@@ -734,17 +736,16 @@ static int parser(const char *const input, const char *const expected)
     if (write_successful < 0) {
         dup2(old_stdin, STDIN_FILENO);
         dup2(old_stdout, STDOUT_FILENO);
-        perror(NULL);
         return 4;
     }
     const int i1_close_res = close(i_fd[1]);
     yyparse();
     const int in_flush_result = fflush(stdin);
     const int out_flush_result = fflush(stdout);
-    if (in_flush_result != 0 || out_flush_result != 0) {
+    const int err_flush_result = fflush(stderr);
+    if (in_flush_result != 0 || out_flush_result != 0 || err_flush_result != 0) {
         dup2(old_stdin, STDIN_FILENO);
         dup2(old_stdout, STDOUT_FILENO);
-        perror(NULL);
         return 5;
     }
     const int in_close_res = close(STDIN_FILENO);
@@ -762,7 +763,6 @@ static int parser(const char *const input, const char *const expected)
     if (read_successful < 0) {
         dup2(old_stdin, STDIN_FILENO);
         dup2(old_stdout, STDOUT_FILENO);
-        perror(NULL);
         return 6;
     }
     const int o0_close_res = close(o_fd[0]);
@@ -774,6 +774,81 @@ static int parser(const char *const input, const char *const expected)
     if (strncmp(got_start, expected, strlen(expected)) != 0) {
         fprintf(stderr, "Got:\n%s\nExpected:\n%s\n", got_start, expected);
         return 8;
+    }
+    return 0;
+}
+
+static int parser(const char *const input, const char *const expected)
+{
+    int i_fd[2];
+    int o_fd[2];
+    const int i_pipe_res = pipe(i_fd);
+    const int o_pipe_res = pipe(o_fd);
+    if (i_pipe_res != 0 || o_pipe_res != 0) {
+        fprintf(stderr, "Opening pipes failed. In: %d Out: %d\n", i_pipe_res, o_pipe_res);
+        return 1;
+    }
+    const int cpid = fork();
+    if (cpid < 0) {
+        fprintf(stderr, "Forking failed.\n");
+        return 2;
+    } else if (cpid == 0) {
+        const int i1_close_res = close(i_fd[1]);
+        const int o0_close_res = close(o_fd[0]);
+        const int i_dup_res = dup2(i_fd[0], STDIN_FILENO);
+        const int o_dup_res = dup2(o_fd[1], STDOUT_FILENO);
+        if (i1_close_res != 0 || o0_close_res != 0 || i_dup_res < 0 || o_dup_res < 0)
+            exit(3);
+        yyparse();
+        const int in_flush_result = fflush(stdin);
+        const int out_flush_result = fflush(stdout);
+        const int err_flush_result = fflush(stderr);
+        if (in_flush_result != 0 || out_flush_result != 0 || err_flush_result != 0)
+            exit(4);
+        const int i0_close_res = close(i_fd[0]);
+        const int o1_close_res = close(o_fd[1]);
+        const int in_close_res = close(STDIN_FILENO);
+        const int out_close_res = close(STDOUT_FILENO);
+        exit(0);
+    }
+    const int i0_close_res = close(i_fd[0]);
+    const int o1_close_res = close(o_fd[1]);
+    if (i0_close_res != 0 || o1_close_res != 0)
+        return 5;
+    const ssize_t write_successful = write(i_fd[1], input, strlen(input));
+    if (write_successful < 0)
+        return 6;
+    const int i1_close_res = close(i_fd[1]);
+    if (i1_close_res != 0)
+        return 7;
+    // TODO add timeout
+    int status;
+    waitpid(cpid, &status, 0);
+    if (!WIFEXITED(status))
+        return 8;
+    if (WEXITSTATUS(status) != 0)
+        return WEXITSTATUS(status);
+    //const int o0_close_res = close(o_fd[0]);
+    //if (o0_close_res != 0)
+    //    return 9;
+    ssize_t read_successful_old = 0;
+    ssize_t read_successful = 0;
+    size_t to_read = TXC_BUF_SIZE > strlen(expected) ? TXC_BUF_SIZE : strlen(expected);
+    char buf[to_read + 1];
+    read_successful = read(o_fd[0], buf, to_read);
+    while (read_successful > 0) {
+        read_successful_old = read_successful;
+        read_successful = read(o_fd[0], buf, to_read);
+    }
+    if (read_successful < 0) {
+        perror(NULL);
+        return 10;
+    }
+    buf[read_successful_old] = 0;
+    const char *const got_start = buf + read_successful_old - strlen(expected) < buf ? buf : buf + read_successful_old - strlen(expected);
+    if (strncmp(got_start, expected, strlen(expected)) != 0) {
+        fprintf(stderr, "Got:\n%s\nExpected:\n%s\n", got_start, expected);
+        return 10;
     }
     return 0;
 }

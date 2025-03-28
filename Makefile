@@ -41,7 +41,7 @@ setup:
 	mkdir -p $(BUILD)
 
 .PHONY: release-full
-release-full: clean setup release check
+release-full: clean setup release test
 
 .PHONY: release
 release: LEX_FLAGS += $(RELEASE_LEX_FLAGS)
@@ -50,7 +50,7 @@ release: CFLAGS += $(RELEASE_CFLAGS)
 release: $(EXE)
 
 .PHONY: debug-full
-debug-full: clean setup debug check
+debug-full: clean setup debug test
 
 .PHONY: debug
 debug: LEX_FLAGS += $(DEBUG_LEX_FLAGS)
@@ -79,6 +79,7 @@ $(EXE)-test: $(addprefix $(BUILD)/, $(OBJS)) $(BUILD)/test.o
 check: test
 
 .PHONY: test
+test: CFLAGS += $(DEBUG_CFLAGS)
 test: $(EXE)-test
 	./test.sh
 
