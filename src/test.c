@@ -1,5 +1,5 @@
 /*
- *     Copyright (C) 2024  Einholz
+ *     Copyright (C) 2024 - 2025  Einholz
  *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU Affero General Public License as published
@@ -25,6 +25,8 @@
 #include "integer.h"
 #include "node.h"
 #include "parser.h"
+#include "test.h"
+#include "util.h"
 
 #define TEST(test)                        \
     else if (strcmp(argv[1], #test) == 0) \
@@ -709,89 +711,192 @@ static int node_frac_int_inverted(void)
     return node_frac_int(true);
 }
 
-static int parser_old(const char *const input, const char *const expected)
-{
-    const int old_stdin = dup(STDIN_FILENO);
-    const int old_stdout = dup(STDOUT_FILENO);
-    if (old_stdin < 0 || old_stdout < 0)
-        return 1;
-    int i_fd[2];
-    int o_fd[2];
-    const int i_pipe_res = pipe(i_fd);
-    const int o_pipe_res = pipe(o_fd);
-    if (i_pipe_res != 0 || o_pipe_res != 0) {
-        fprintf(stderr, "Opening pipes failed. In: %d Out: %d\n", i_pipe_res, o_pipe_res);
-        return 2;
-    }
-    const int i_dup_res = dup2(i_fd[0], STDIN_FILENO);
-    const int o_dup_res = dup2(o_fd[1], STDOUT_FILENO);
-    const int i0_close_res = close(i_fd[0]);
-    const int o1_close_res = close(o_fd[1]);
-    if (i_dup_res < 0 || o_dup_res < 0 || i0_close_res != 0 || o1_close_res != 0) {
-        dup2(old_stdin, STDIN_FILENO);
-        dup2(old_stdout, STDOUT_FILENO);
-        return 3;
-    }
-    ssize_t write_successful = write(i_fd[1], input, strlen(input));
-    if (write_successful < 0) {
-        dup2(old_stdin, STDIN_FILENO);
-        dup2(old_stdout, STDOUT_FILENO);
-        return 4;
-    }
-    const int i1_close_res = close(i_fd[1]);
-    yyparse();
-    const int in_flush_result = fflush(stdin);
-    const int out_flush_result = fflush(stdout);
-    const int err_flush_result = fflush(stderr);
-    if (in_flush_result != 0 || out_flush_result != 0 || err_flush_result != 0) {
-        dup2(old_stdin, STDIN_FILENO);
-        dup2(old_stdout, STDOUT_FILENO);
-        return 5;
-    }
-    const int in_close_res = close(STDIN_FILENO);
-    const int out_close_res = close(STDOUT_FILENO);
-    ssize_t old_read_successful = 0;
-    ssize_t read_successful = 0;
-    size_t to_read = TXC_BUF_SIZE > strlen(expected) ? TXC_BUF_SIZE : strlen(expected);
-    char buf[to_read + 1];
-    read_successful = read(o_fd[0], buf, to_read);
-    while (read_successful > 0) {
-        old_read_successful = read_successful;
-        read_successful = read(o_fd[0], buf, to_read);
-    }
-    buf[old_read_successful] = 0;
-    if (read_successful < 0) {
-        dup2(old_stdin, STDIN_FILENO);
-        dup2(old_stdout, STDOUT_FILENO);
-        return 6;
-    }
-    const int o0_close_res = close(o_fd[0]);
-    const int i_reset_res = dup2(old_stdin, STDIN_FILENO);
-    const int o_reset_res = dup2(old_stdout, STDOUT_FILENO);
-    if (i1_close_res != 0 || o0_close_res != 0 || in_close_res != 0 || out_close_res != 0 || i_reset_res < 0 || o_reset_res < 0)
-        return 7;
-    const char *const got_start = buf + old_read_successful - strlen(expected) < buf ? buf : buf + old_read_successful - strlen(expected);
-    if (strncmp(got_start, expected, strlen(expected)) != 0) {
-        fprintf(stderr, "Got:\n%s\nExpected:\n%s\n", got_start, expected);
-        return 8;
-    }
-    return 0;
-}
-
+// Assumes being called in its own process
 static int parser(const char *const input, const char *const expected)
 {
+    const size_t close_fds_size = 6;
+    int close_fds[close_fds_size];
+    memset(close_fds, -1, sizeof close_fds);
+    const size_t undup_fds_size = 2;
+    int undup_fds[2 * undup_fds_size];
+    memset(undup_fds, -1, sizeof undup_fds);
+    size_t to_read = txc_max(TXC_BUF_SIZE, strlen(expected));
+    char buf[2 * to_read];
+    memset(buf, 0, 2 * to_read);
+    const int old_stdin = dup(STDIN_FILENO);
+    if (old_stdin < 0) {
+        TXC_TEST_ERROR_DUP(STDIN_FILENO);
+        goto error_cleanup;
+    }
+    close_fds[0] = old_stdin;
+    const int old_stdout = dup(STDOUT_FILENO);
+    if (old_stdin < 0) {
+        TXC_TEST_ERROR_DUP(STDOUT_FILENO);
+        goto error_cleanup;
+    }
+    close_fds[1] = old_stdout;
     int i_fd[2];
     int o_fd[2];
     const int i_pipe_res = pipe(i_fd);
+    if (i_pipe_res != 0) {
+        TXC_TEST_ERROR_PIPE();
+        goto error_cleanup;
+    }
+    close_fds[2] = i_fd[0];
+    close_fds[3] = i_fd[1];
     const int o_pipe_res = pipe(o_fd);
-    if (i_pipe_res != 0 || o_pipe_res != 0) {
-        fprintf(stderr, "Opening pipes failed. In: %d Out: %d\n", i_pipe_res, o_pipe_res);
-        return 1;
+    if (o_pipe_res != 0) {
+        TXC_TEST_ERROR_PIPE();
+        goto error_cleanup;
+    }
+    close_fds[4] = o_fd[0];
+    close_fds[5] = o_fd[1];
+    const int i_dup_res = dup2(i_fd[0], STDIN_FILENO);
+    if (i_dup_res < 0) {
+        TXC_TEST_ERROR_DUP2(i_fd[0], STDIN_FILENO);
+        goto error_cleanup;
+    }
+    undup_fds[0] = old_stdin;
+    undup_fds[1] = STDIN_FILENO;
+    const int i0_close_res = close(i_fd[0]);
+    if (i0_close_res != 0) {
+        TXC_TEST_ERROR_CLOSE(i_fd[0]);
+        goto error_cleanup;
+    }
+    close_fds[2] = -1;
+    const int o_dup_res = dup2(o_fd[1], STDOUT_FILENO);
+    if (o_dup_res < 0) {
+        TXC_TEST_ERROR_DUP2(o_fd[1], STDOUT_FILENO);
+        goto error_cleanup;
+    }
+    undup_fds[2] = old_stdout;
+    undup_fds[3] = STDOUT_FILENO;
+    const int o1_close_res = close(o_fd[1]);
+    if (o1_close_res != 0) {
+        TXC_TEST_ERROR_CLOSE(o_fd[1]);
+        goto error_cleanup;
+    }
+    close_fds[5] = -1;
+    // TODO include zero byte?
+    size_t remaining_write = strlen(input);
+    size_t written = 0;
+    while (written < remaining_write) {
+        ssize_t write_successful = write(i_fd[1], input + written, remaining_write);
+        if (write_successful < 0) {
+            TXC_TEST_ERROR_WRITE(remaining_write, i_fd[1]);
+            goto error_cleanup;
+        }
+        written += write_successful;
+        remaining_write -= write_successful;
+    }
+    const int i1_close_res = close(i_fd[1]);
+    if (i1_close_res != 0) {
+        TXC_TEST_ERROR_CLOSE(i_fd[1]);
+        goto error_cleanup;
+    }
+    close_fds[3] = -1;
+    yyparse();
+    const int i_flush_res = fflush(stdin);
+    if (i_flush_res != 0)
+        TXC_TEST_WARN_FFLUSH();
+    const int o_flush_res = fflush(stdout);
+    if (o_flush_res != 0)
+        TXC_TEST_WARN_FFLUSH();
+    const int i_close_res = close(STDIN_FILENO);
+    if (i_close_res != 0) {
+        TXC_TEST_ERROR_CLOSE(STDIN_FILENO);
+        goto error_cleanup;
+    }
+    const int o_close_res = close(STDOUT_FILENO);
+    if (o_close_res != 0) {
+        TXC_TEST_ERROR_CLOSE(STDOUT_FILENO);
+        goto error_cleanup;
+    }
+    size_t total_read = 0;
+    // to_read and buf declaration could be here but would bypass goto
+    size_t read_successful = read(o_fd[0], &buf[to_read], to_read);
+    while (read_successful > 0)
+    {
+        memmove(&buf[0], &buf[read_successful], to_read);
+        total_read += read_successful;
+        read_successful = read(o_fd[0], &buf[to_read], to_read);
+    }
+    if (read_successful < 0) {
+        TXC_TEST_ERROR_READ(to_read, o_fd[0]);
+        goto error_cleanup;
+    }
+    buf[to_read] = 0;
+    const int o0_close_res = close(o_fd[0]);
+    if (o0_close_res != 0) {
+        TXC_TEST_ERROR_CLOSE(o_fd[0]);
+        goto error_cleanup;
+    }
+    close_fds[4] = -1;
+    const int i_reset_res = dup2(old_stdin, STDIN_FILENO);
+    if (i_reset_res < 0) {
+        TXC_TEST_ERROR_DUP2(old_stdin, STDIN_FILENO);
+        goto error_cleanup;
+    }
+    undup_fds[0] = -1;
+    undup_fds[1] = -1;
+    const int o_reset_res = dup2(old_stdout, STDOUT_FILENO);
+    if (o_reset_res < 0) {
+        TXC_TEST_ERROR_DUP2(old_stdout, STDOUT_FILENO);
+        goto error_cleanup;
+    }
+    undup_fds[2] = -1;
+    undup_fds[3] = -1;
+    if (strncmp(&buf[to_read - strlen(expected)], expected, strlen(expected)) != 0) {
+        size_t cmp_start = to_read < total_read ? 0 : to_read - total_read;
+        fprintf(stderr, "Got:\n%s\nExpected:\n%s\n", &buf[cmp_start], expected);
+        exit(EXIT_FAILURE);
+    }
+    exit(EXIT_SUCCESS);
+error_cleanup:
+    for (size_t i = 0; i < close_fds_size; i++) {
+        if (close_fds[i] < 0)
+            continue;
+        const int close_res = close(close_fds[i]);
+        if (close_res != 0)
+            TXC_TEST_WARN_CLOSE(close_fds[i]);
+    }
+    for (size_t i = 0; i + 1 < undup_fds_size; i += 2) {
+        if (undup_fds[i] < 0 || undup_fds[i + 1] < 0)
+            continue;
+        const int dup_res = dup2(undup_fds[i], undup_fds[i + 1]);
+        if (dup_res < 0)
+            TXC_TEST_WARN_DUP2(undup_fds[i], undup_fds[i + 1]);
+        const int close_res = close(undup_fds[i]);
+        if (close_res != 0)
+            TXC_TEST_WARN_CLOSE(undup_fds[i]);
+    }
+    exit(EXIT_FAILURE);
+}
+/*
+static int fork_parser(const char *const input, const char *const expected)
+{
+    int i_fd[2];
+    int o_fd[2];
+    const int i_pipe_res = pipe(i_fd);
+    if (i_pipe_res != 0) {
+        TXC_TEST_ERROR_PIPE();
+        return EXIT_FAILURE;
+    }
+    const int o_pipe_res = pipe(o_fd);
+    if (o_pipe_res != 0) {
+        TXC_TEST_ERROR_PIPE();
+        close(i_fd[0]);
+        close(i_fd[1]);
+        return EXIT_FAILURE;
     }
     const int cpid = fork();
     if (cpid < 0) {
-        fprintf(stderr, "Forking failed.\n");
-        return 2;
+        TXC_TEST_ERROR_FORK();
+        close(i_fd[0]);
+        close(i_fd[1]);
+        close(o_fd[0]);
+        close(o_fd[1]);
+        return EXIT_FAILURE;
     } else if (cpid == 0) {
         const int i1_close_res = close(i_fd[1]);
         const int o0_close_res = close(o_fd[0]);
@@ -852,6 +957,7 @@ static int parser(const char *const input, const char *const expected)
     }
     return 0;
 }
+*/
 
 static int node_combined(void)
 {

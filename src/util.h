@@ -1,5 +1,5 @@
 /*
- *     Copyright (C) 2024  Einholz
+ *     Copyright (C) 2024 - 2025  Einholz
  *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU Affero General Public License as published
@@ -33,6 +33,9 @@ struct txc_size_t_tuple {
     size_t a;
     size_t b;
 };
+
+#define txc_min(a, b) (a < b ? a : b)
+#define txc_max(a, b) (a > b ? a : b)
 
 extern char *txc_strdup(const char *const str);
 
