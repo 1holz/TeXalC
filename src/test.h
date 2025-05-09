@@ -22,6 +22,7 @@
 
 #include <errno.h>
 
+#define TXC_TEST_ERROR_ABNORMAL() fprintf(stderr, "[ERROR] @%s:%u Child terminated abnormally", __FILE__, __LINE__)
 #define TXC_TEST_ERROR_CLOSE(fd) fprintf(stderr, "[ERROR] @%s:%u Closing file descriptor %u failed: %s", __FILE__, __LINE__, fd, strerror(errno))
 #define TXC_TEST_ERROR_DUP(fd) fprintf(stderr, "[ERROR] @%s:%u Duplicating file descriptor %u failed: %s", __FILE__, __LINE__, fd, strerror(errno))
 #define TXC_TEST_ERROR_DUP2(from, to) fprintf(stderr, "[ERROR] @%s:%u Duplicating file descriptor %u to %u failed: %s", __FILE__, __LINE__, from, to, strerror(errno))

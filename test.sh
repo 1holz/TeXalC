@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#    Copyright (C) 2024  Einholz
+#    Copyright (C) 2024 - 2025  Einholz
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Affero General Public License as published
@@ -138,7 +138,7 @@ if ./texalc-test node_frac_int_inverted; then
 else
     ((fails++));
 fi;
-if ./texalc-test node_combined; then
+if ./texalc-test parser_combined; then
     ((passes++));
 else
     ((fails++));
