@@ -81,7 +81,7 @@ check: test
 .PHONY: test
 test: CFLAGS += $(DEBUG_CFLAGS)
 test: $(EXE)-test
-	./test.sh
+	./$(EXE)-test
 
 .PHONY: clean
 clean:

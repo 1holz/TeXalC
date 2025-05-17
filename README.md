@@ -27,6 +27,5 @@ It should run in any environment complying with POSIX.1-2001 or newer.
 For building the following additional requirements have to be met:
 - bison instead of yacc
 - GNU make instead of make
-- bash instead of sh (used for tests only)
 
 Can be build by just running `make` in the top directory.

@@ -28,8 +28,10 @@
 #include "test.h"
 #include "util.h"
 
-#define TEST(test)                        \
-    else if (strcmp(argv[1], #test) == 0) \
+#define FUN(name) { *name, #name }
+
+#define TEST(test)                     \
+    else if (strcmp(name, #test) == 0) \
         ec = fork_test(&test);
 
 #ifndef TXC_BUF_SIZE
@@ -66,6 +68,11 @@ enum op {
     SIGNED_ADD,
     UNSIGNED_MUL,
     SIGNED_MUL
+};
+
+struct fun {
+    void (*const test)(void);
+    const char *name;
 };
 
 /* SETUP */
@@ -231,7 +238,7 @@ error_cleanup:
     exit(EXIT_FAILURE);
 }
 
-static int fork_test(void(test)(void))
+static int fork_test(void (*const test)(void))
 {
     const int cpid = fork();
     if (cpid < 0) {
@@ -899,15 +906,12 @@ static void parser_combined(void)
 
 /* MAIN */
 
-int main(int argc, char **argv)
+int individual(char *name)
 {
     int ec;
-    if (argc < 2) {
-        fprintf(stderr, "No test name specified.\n");
-        return -1;
-    } else if (strcmp(argv[1], "test_start") == 0) {
+    if (strcmp(name, "test_start") == 0) {
         printf("Running tests for TeXalC %u.%u.%u:\n", TXC_VERSION_MAJOR, TXC_VERSION_MINOR, TXC_VERSION_PATCH);
-        ec = -3;
+        return 0;
     }
     TEST(test_test)
     TEST(integer_one)
@@ -936,19 +940,65 @@ int main(int argc, char **argv)
     TEST(parser_combined)
     else
     {
-        fprintf(stderr, "No test with name %s exists.\n", argv[1]);
+        fprintf(stderr, "No test with name %s exists.\n", name);
         return -2;
     }
-    switch (ec) {
-    case -3:
-        ec = 0;
-        break;
-    case 0:
-        printf("PASS: %s\n", argv[1]);
-        break;
-    default:
-        printf("FAIL: %s with exit code %d\n", argv[1], ec);
-        break;
-    }
+    if (ec == 0)
+        printf("PASS: %s\n", name);
+    else
+        printf("FAIL: %s with exit code %d\n", name, ec);
     return ec;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc > 1)
+        return individual(argv[1]);
+    printf("Running tests for TeXalC %u.%u.%u:\n", TXC_VERSION_MAJOR, TXC_VERSION_MINOR, TXC_VERSION_PATCH);
+    struct fun tests[] = {
+        FUN(test_test),
+        FUN(integer_one),
+        FUN(integer_zero),
+        FUN(integer_copy),
+        FUN(integer_create_bin),
+        FUN(integer_create_dec),
+        FUN(integer_create_hex),
+        FUN(integer_unsigned_add),
+        FUN(integer_signed_add),
+        FUN(integer_unsigned_mul),
+        FUN(integer_signed_mul),
+        FUN(integer_gcd),
+        FUN(integer_div_invalid),
+        FUN(integer_div),
+        FUN(integer_to_str),
+        FUN(node_constants),
+        FUN(node_create_nan),
+        FUN(node_neg),
+        FUN(node_unsigned_add),
+        FUN(node_signed_add),
+        FUN(node_unsigned_mul),
+        FUN(node_signed_mul),
+        FUN(node_frac_int_normal),
+        FUN(node_frac_int_inverted),
+        FUN(parser_combined)
+    };
+    size_t total = sizeof tests / sizeof *tests;
+    size_t passes = 0;
+    size_t fails = 0;
+    for (size_t i = 0; i < total; i++) {
+        int ec = fork_test(tests[i].test);
+        if (ec == 0) {
+            printf("PASS: %s\n", tests[i].name);
+            passes++;
+        } else {
+            printf("FAIL: %s with exit code %d\n", tests[i].name, ec);
+            fails++;
+        }
+    }
+    printf("=========\n");
+    printf("TOTAL: %2zu\n", total);
+    printf("PASS:  %2zu\n", passes);
+    printf("FAIL:  %2zu\n", fails);
+    printf("=========\n");
+    return fails;
 }
